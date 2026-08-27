@@ -4,6 +4,10 @@ A fully working, frontend-only food delivery demo built with Next.js App
 Router, TypeScript, Tailwind CSS, and local mock data. No backend or
 database — cart and order data persist to `localStorage`.
 
+
+<img width="1760" height="866" alt="Screenshot From 2026-08-27 17-05-48" src="https://github.com/user-attachments/assets/f9069ae8-5863-4378-b701-4e8a6ea604fc" />
+
+
 ## Getting started
 
 ```bash
@@ -67,3 +71,5 @@ data/           restaurants, food, categories, coupons (mock data)
 lib/            storage.ts, calculations.ts, razorpay.ts
 types/          shared TypeScript interfaces
 ```
+
+
