@@ -30,3 +30,54 @@ export interface Coupon {
   maxDiscount?: number;
   description: string;
 }
+
+// ADD THESE
+
+export interface CartItem extends FoodItem {
+  quantity: number;
+}
+
+export interface CartTotals {
+  subtotal: number;
+  deliveryFee: number;
+  tax: number;
+  total: number;
+}
+
+export interface Category {
+  id: number;
+  name: string;
+  image?: string;
+}
+
+export interface OrderItem {
+  id?: number;
+  foodId?: number;
+  name: string;
+  price: number;
+  quantity: number;
+  image?: string;
+}
+
+export interface Order {
+  id: number;
+  userId?: number;
+  restaurantId?: number;
+  restaurantName?: string;
+
+  items: OrderItem[];
+
+  subtotal: number;
+  deliveryFee: number;
+  tax: number;
+  total: number;
+
+  status?: string;
+  paymentStatus?: string;
+  paymentId?: string;
+
+  address?: string;
+
+  createdAt?: string;
+  updatedAt?: string;
+}

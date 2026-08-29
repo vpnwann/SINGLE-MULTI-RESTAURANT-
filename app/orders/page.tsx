@@ -2,19 +2,41 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { loadOrders } from "@/lib/storage";
+import ProtectedRoute from "../../components/Protected";
+import { ordersApi } from "./orderapi";
 import { Order } from "@/types";
 import { formatCurrency } from "@/lib/calculations";
 
-export default function OrdersPage() {
+function OrdersPageContent() {
   const [orders, setOrders] = useState<Order[] | null>(null);
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    // Orders live in localStorage, which is only available client-side,
-    // so we read them after mount rather than during render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrders(loadOrders());
+    let cancelled = false;
+
+    async function fetchOrders() {
+      try {
+        const res = await ordersApi.list();
+        if (!cancelled) setOrders(res.data);
+      } catch (err: any) {
+        if (!cancelled) setError(err.message || "Failed to load orders");
+      }
+    }
+
+    fetchOrders();
+    return () => {
+      cancelled = true;
+    };
   }, []);
+
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <h1 className="text-xl font-semibold mb-2">Couldn&apos;t load your orders</h1>
+        <p className="text-gray-500">{error}</p>
+      </div>
+    );
+  }
 
   if (orders === null) {
     return <div className="max-w-2xl mx-auto px-4 py-16 text-center">Loading...</div>;
@@ -67,5 +89,13 @@ export default function OrdersPage() {
         ))}
       </div>
     </div>
+  );
+}
+
+export default function OrdersPage() {
+  return (
+    <ProtectedRoute>
+      <OrdersPageContent />
+    </ProtectedRoute>
   );
 }

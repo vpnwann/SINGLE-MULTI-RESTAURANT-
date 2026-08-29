@@ -5,13 +5,26 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import CartSummary from "@/components/CartSummary";
-import RazorpayCheckout from "@/components/RazorpayCheckout";
-import { addOrder } from "@/lib/storage";
-import { Address, Order, PaymentStatus } from "@/types";
+import RazorpayCheckout, { RazorpaySuccessDetails } from "@/components/RazorpayCheckout";
+import { ordersApi } from "../orders/orderapi";
 
-const DEFAULT_ADDRESS: Address = {
+// NOTE: this component assumes each cart item's `id` is the food item's
+// database id (foodId) — the backend's POST /api/orders expects
+// { foodId, quantity } per item and re-derives prices itself. If your
+// CartContext uses a different key for the food id, update the mapping
+// in buildOrderPayload below.
+
+type AddressForm = {
+  name: string;
+  line: string;
+  city: string;
+  pincode: string;
+};
+
+const DEFAULT_ADDRESS: AddressForm = {
   name: "Namit",
-  line: "Jaipur, Rajasthan",
+  line: "MI Road",
+  city: "Jaipur",
   pincode: "302001",
 };
 
@@ -19,10 +32,9 @@ type PaymentMethod = "razorpay" | "cod";
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, restaurantId, restaurantName, coupon, totals, clearCart } =
-    useCart();
+  const { items, restaurantId, restaurantName, coupon, totals, clearCart } = useCart();
 
-  const [address, setAddress] = useState<Address>(DEFAULT_ADDRESS);
+  const [address, setAddress] = useState<AddressForm>(DEFAULT_ADDRESS);
   const [editingAddress, setEditingAddress] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("razorpay");
   const [placingOrder, setPlacingOrder] = useState(false);
@@ -45,42 +57,62 @@ export default function CheckoutPage() {
     );
   }
 
-  const fullAddress = `${address.name}, ${address.line} - ${address.pincode}`;
+  const fullAddress = `${address.name}, ${address.line}, ${address.city} - ${address.pincode}`;
 
-  const createOrder = (paymentStatus: PaymentStatus) => {
-    if (!restaurantId || !restaurantName) return;
+  const buildOrderPayload = () => ({
+    restaurantId,
+    items: items.map((item) => ({ foodId: item.id, quantity: item.quantity })),
+    couponCode: coupon?.code || undefined,
+    address: {
+      name: address.name,
+      address: address.line,
+      city: address.city,
+      pincode: address.pincode,
+    },
+  });
 
-    const order: Order = {
-      id: `ORD${Date.now()}`,
-      restaurantId,
-      restaurantName,
-      items,
-      subtotal: totals.itemTotal,
-      deliveryFee: totals.deliveryFee,
-      platformFee: totals.platformFee,
-      tax: totals.tax,
-      discount: totals.discount,
-      couponCode: coupon?.code ?? null,
-      total: totals.grandTotal,
-      address: fullAddress,
-      paymentMethod: paymentMethod === "razorpay" ? "Razorpay" : "Cash on Delivery",
-      paymentStatus,
-      orderStatus: "Order Confirmed",
-      createdAt: new Date().toISOString(),
-    };
-
-    addOrder(order);
-    clearCart();
-    router.push(`/order-success?orderId=${order.id}`);
-  };
-
-  const handleCodOrder = () => {
+  const handleCodOrder = async () => {
     setPlacingOrder(true);
     setError(null);
-    setTimeout(() => {
-      createOrder("Pending");
+    try {
+      const res = await ordersApi.create({
+        ...buildOrderPayload(),
+        paymentMethod: "COD",
+      });
+      clearCart();
+      router.push(`/order-success?orderId=${res.data.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not place order. Please try again.");
+    } finally {
       setPlacingOrder(false);
-    }, 500);
+    }
+  };
+
+  const handleRazorpaySuccess = async (details: RazorpaySuccessDetails) => {
+    setPlacingOrder(true);
+    setError(null);
+    try {
+      const res = await ordersApi.create({
+        ...buildOrderPayload(),
+        paymentMethod: "RAZORPAY",
+        razorpayOrderId: details.razorpayOrderId,
+        razorpayPaymentId: details.paymentId,
+        razorpaySignature: details.razorpaySignature,
+      });
+      clearCart();
+      router.push(`/order-success?orderId=${res.data.id}`);
+    } catch (err) {
+      // Payment already succeeded and was verified at this point — this
+      // failure is "order couldn't be saved", not "payment failed", so
+      // don't let the user re-pay. Surface it clearly instead.
+      setError(
+        err instanceof Error
+          ? `Payment succeeded but the order could not be saved: ${err.message}. Contact support with payment ID ${details.paymentId}.`
+          : "Payment succeeded but the order could not be saved. Contact support."
+      );
+    } finally {
+      setPlacingOrder(false);
+    }
   };
 
   return (
@@ -110,6 +142,12 @@ export default function CheckoutPage() {
               value={address.line}
               onChange={(e) => setAddress({ ...address, line: e.target.value })}
               placeholder="Address"
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            />
+            <input
+              value={address.city}
+              onChange={(e) => setAddress({ ...address, city: e.target.value })}
+              placeholder="City"
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
             />
             <input
@@ -169,7 +207,9 @@ export default function CheckoutPage() {
           amount={totals.grandTotal}
           name="TastyGo"
           description={`Order from ${restaurantName}`}
-          onSuccess={() => createOrder("Paid")}
+          receipt={`${restaurantId}_${Date.now()}`}
+          prefillName={address.name}
+          onSuccess={handleRazorpaySuccess}
           onFailure={() => setError("Payment failed. Please try again.")}
         />
       ) : (

@@ -1,23 +1,18 @@
 /**
- * Razorpay integration helpers.
+ * Razorpay integration helpers, backed by a real Express server.
  *
- * This is a FRONTEND-ONLY demo. There is no backend in this project, so we
- * never create a real Razorpay order (that requires the secret key on a
- * server) and we never reference RAZORPAY_KEY_SECRET anywhere in this code.
+ *  - POST /api/razorpay/create-order  -> creates a real Razorpay order,
+ *    returns { orderId, amount, currency }
+ *  - POST /api/razorpay/verify-payment -> verifies the HMAC SHA256
+ *    signature server-side, returns { verified: boolean }
  *
- * Structure notes for a future Express.js backend:
- *  - POST /api/razorpay/create-order
- *      body: { amount: number, currency: "INR", receipt: string }
- *      -> creates a real order using `razorpay` npm package + KEY_SECRET
- *      -> returns { orderId, amount, currency }
- *  - POST /api/razorpay/verify-payment
- *      body: { razorpay_order_id, razorpay_payment_id, razorpay_signature }
- *      -> verifies the signature using KEY_SECRET (HMAC SHA256)
- *      -> returns { verified: boolean }
- *
- * `createOrderOnServer` and `verifyPaymentOnServer` below are stubbed to show
- * exactly where those calls would go once a backend exists.
+ * The actual security boundary is POST /api/orders, which independently
+ * re-verifies the signature before persisting paymentStatus: "Paid" — so
+ * verifyPaymentOnServer here is for fast UI feedback, not the source of
+ * truth.
  */
+
+import { apiFetch } from "./razorapi";
 
 export const RAZORPAY_KEY_ID =
   process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_placeholder_key";
@@ -26,8 +21,8 @@ export const RAZORPAY_SCRIPT_URL = "https://checkout.razorpay.com/v1/checkout.js
 
 export interface RazorpaySuccessResponse {
   razorpay_payment_id: string;
-  razorpay_order_id?: string;
-  razorpay_signature?: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
 }
 
 export interface CreateOrderParams {
@@ -35,10 +30,15 @@ export interface CreateOrderParams {
   receipt: string;
 }
 
+export interface CreateOrderResult {
+  orderId: string;
+  amount: number;
+  currency: string;
+}
+
 /**
  * Loads the Razorpay checkout script exactly once.
- * Resolves `false` if the script fails to load (e.g. no network access),
- * so callers can fall back to the mock payment flow.
+ * Resolves `false` if the script fails to load (e.g. no network access).
  */
 export function loadRazorpayScript(): Promise<boolean> {
   return new Promise((resolve) => {
@@ -69,28 +69,26 @@ export function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-/**
- * STUB: would call POST /api/razorpay/create-order on a real backend.
- * Since there is no backend here, this always throws so callers know to
- * fall back to the mock/demo payment flow.
- */
+/** Calls POST /api/razorpay/create-order to get a real Razorpay order_id. */
 export async function createOrderOnServer(
   params: CreateOrderParams
-): Promise<never> {
-  void params;
-  throw new Error(
-    "No backend available to create a real Razorpay order. Use the mock payment flow."
-  );
+): Promise<CreateOrderResult> {
+  const res = await apiFetch("/api/razorpay/create-order", {
+    method: "POST",
+    body: JSON.stringify(params),
+  });
+  return res.data;
 }
 
-/**
- * STUB: would call POST /api/razorpay/verify-payment on a real backend.
- */
+/** Calls POST /api/razorpay/verify-payment to check the HMAC signature. */
 export async function verifyPaymentOnServer(
   response: RazorpaySuccessResponse
 ): Promise<boolean> {
-  void response;
-  throw new Error("No backend available to verify Razorpay payment signature.");
+  const res = await apiFetch("/api/razorpay/verify-payment", {
+    method: "POST",
+    body: JSON.stringify(response),
+  });
+  return Boolean(res.data?.verified);
 }
 
 declare global {

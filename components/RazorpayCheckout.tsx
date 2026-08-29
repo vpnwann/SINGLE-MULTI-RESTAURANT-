@@ -1,13 +1,27 @@
 "use client";
 
 import { useState } from "react";
-import { loadRazorpayScript, RAZORPAY_KEY_ID } from "@/lib/razorpay";
+import {
+  loadRazorpayScript,
+  createOrderOnServer,
+  verifyPaymentOnServer,
+  RAZORPAY_KEY_ID,
+} from "@/lib/razorpay";
+
+export interface RazorpaySuccessDetails {
+  paymentId: string;
+  razorpayOrderId: string;
+  razorpaySignature: string;
+}
 
 interface RazorpayCheckoutProps {
   amount: number; // in rupees
   name: string;
   description: string;
-  onSuccess: (paymentId: string) => void;
+  receipt: string; // unique per checkout attempt, e.g. cart/restaurant id
+  prefillName?: string;
+  prefillContact?: string;
+  onSuccess: (details: RazorpaySuccessDetails) => void;
   onFailure?: (reason: string) => void;
 }
 
@@ -15,6 +29,9 @@ export default function RazorpayCheckout({
   amount,
   name,
   description,
+  receipt,
+  prefillName,
+  prefillContact,
   onSuccess,
   onFailure,
 }: RazorpayCheckoutProps) {
@@ -27,35 +44,47 @@ export default function RazorpayCheckout({
 
     try {
       const scriptLoaded = await loadRazorpayScript();
-
-      // There is no backend in this project to create a real Razorpay
-      // order (that requires RAZORPAY_KEY_SECRET on a server), so if the
-      // checkout script isn't available we fall back to a mock payment
-      // that still completes the demo order flow end-to-end.
       if (!scriptLoaded || !window.Razorpay) {
-        runMockPayment();
-        return;
+        throw new Error("Could not load the payment provider. Check your connection and try again.");
       }
+
+      // Real order_id from the backend — required by Razorpay Checkout
+      // and what makes the payment referenceable/verifiable afterward.
+      const order = await createOrderOnServer({ amountInRupees: amount, receipt });
 
       const razorpay = new window.Razorpay({
         key: RAZORPAY_KEY_ID,
-        amount: Math.round(amount * 100), // paise
-        currency: "INR",
+        amount: order.amount,
+        currency: order.currency,
+        order_id: order.orderId,
         name,
         description,
-        // In a real integration this order_id would come from
-        // POST /api/razorpay/create-order on an Express backend.
         prefill: {
-          name: "Namit",
-          contact: "9999999999",
+          name: prefillName,
+          contact: prefillContact,
         },
         theme: { color: "#ea580c" },
-        handler: (response: unknown) => {
-          const paymentId =
-            (response as { razorpay_payment_id?: string })
-              ?.razorpay_payment_id ?? `pay_demo_${Date.now()}`;
+        handler: async (response: unknown) => {
+          const r = response as {
+            razorpay_payment_id: string;
+            razorpay_order_id: string;
+            razorpay_signature: string;
+          };
+
+          const verified = await verifyPaymentOnServer(r);
           setLoading(false);
-          onSuccess(paymentId);
+
+          if (!verified) {
+            setError("Payment verification failed. Please contact support before retrying.");
+            onFailure?.("verification_failed");
+            return;
+          }
+
+          onSuccess({
+            paymentId: r.razorpay_payment_id,
+            razorpayOrderId: r.razorpay_order_id,
+            razorpaySignature: r.razorpay_signature,
+          });
         },
         modal: {
           ondismiss: () => {
@@ -72,18 +101,10 @@ export default function RazorpayCheckout({
       });
 
       razorpay.open();
-    } catch {
-      runMockPayment();
-    }
-  };
-
-  const runMockPayment = () => {
-    // Simulates a successful test payment so the demo flow always works,
-    // even without network access to Razorpay's checkout script.
-    setTimeout(() => {
+    } catch (err) {
       setLoading(false);
-      onSuccess(`pay_mock_${Date.now()}`);
-    }, 900);
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    }
   };
 
   return (
@@ -97,7 +118,7 @@ export default function RazorpayCheckout({
       </button>
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
       <p className="text-xs text-gray-400 mt-2 text-center">
-        Test mode — no real payment will be charged.
+        Payments are processed securely by Razorpay.
       </p>
     </div>
   );

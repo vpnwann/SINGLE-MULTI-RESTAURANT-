@@ -2,9 +2,55 @@
 
 import { use, useEffect, useState } from "react";
 import Link from "next/link";
-import { getOrderById, updateOrderStatus } from "@/lib/storage";
-import { Order, OrderStatus } from "@/types";
+import ProtectedRoute from "../../../components/Protected";
+import { ordersApi } from "../orderapi";
 import { formatCurrency } from "@/lib/calculations";
+
+// Matches mapOrder() in orderapi.js — the camelCase shape the frontend
+// works with, adapted from the raw Postgres row.
+type OrderStatus =
+  | "Order Confirmed"
+  | "Restaurant Accepted"
+  | "Preparing"
+  | "Out for Delivery"
+  | "Delivered";
+
+interface OrderItem {
+  foodId: number;
+  name: string;
+  price: number;
+  quantity: number;
+}
+
+interface OrderAddress {
+  name: string;
+  address: string;
+  city: string;
+  pincode: string;
+}
+
+interface Order {
+  id: number;
+  restaurantId: number;
+  restaurantName: string;
+  items: OrderItem[];
+  subtotal: number;
+  deliveryFee: number;
+  platformFee: number;
+  discount: number;
+  gst: number;
+  total: number;
+  couponCode: string | null;
+  address: OrderAddress;
+  paymentMethod: "COD" | "RAZORPAY";
+  paymentStatus: "Pending" | "Paid";
+  orderStatus: OrderStatus;
+  createdAt: string;
+}
+
+interface ApiError extends Error {
+  status?: number;
+}
 
 const STATUS_STEPS: OrderStatus[] = [
   "Order Confirmed",
@@ -14,28 +60,56 @@ const STATUS_STEPS: OrderStatus[] = [
   "Delivered",
 ];
 
-export default function OrderTrackingPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
+function formatAddress(address: OrderAddress | string): string {
+  if (typeof address === "string") return address; // fallback for any legacy shape
+  return `${address.name}, ${address.address}, ${address.city} - ${address.pincode}`;
+}
+
+function OrderTrackingContent({ id }: { id: string }) {
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
+  const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
-    // localStorage is only available client-side, so we read the order
-    // after mount rather than during render.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOrder(getOrderById(id) ?? null);
+    let cancelled = false;
+
+    async function fetchOrder() {
+      try {
+        const res = await ordersApi.get(id);
+        if (!cancelled) setOrder(res.data);
+      } catch (err) {
+        if (cancelled) return;
+        const apiErr = err as ApiError;
+        if (apiErr.status === 404) {
+          setOrder(null);
+        } else {
+          setError(apiErr.message || "Failed to load order");
+        }
+      }
+    }
+
+    fetchOrder();
+    return () => {
+      cancelled = true;
+    };
   }, [id]);
 
-  const advanceStatus = () => {
+  const advanceStatus = async () => {
     if (!order) return;
     const currentIndex = STATUS_STEPS.indexOf(order.orderStatus);
     if (currentIndex === -1 || currentIndex === STATUS_STEPS.length - 1) return;
     const nextStatus = STATUS_STEPS[currentIndex + 1];
-    const updated = updateOrderStatus(order.id, nextStatus);
-    if (updated) setOrder(updated);
+
+    setAdvancing(true);
+    setError(null);
+    try {
+      const res = await ordersApi.updateStatus(order.id, nextStatus);
+      setOrder(res.data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not update order status");
+    } finally {
+      setAdvancing(false);
+    }
   };
 
   if (order === undefined) {
@@ -92,12 +166,15 @@ export default function OrderTrackingPage({
           })}
         </ol>
 
+        {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
+
         {!isDelivered && (
           <button
             onClick={advanceStatus}
-            className="mt-4 w-full bg-orange-600 text-white font-medium py-2.5 rounded-lg hover:bg-orange-700"
+            disabled={advancing}
+            className="mt-4 w-full bg-orange-600 text-white font-medium py-2.5 rounded-lg hover:bg-orange-700 disabled:opacity-60"
           >
-            Next Status
+            {advancing ? "Updating..." : "Next Status"}
           </button>
         )}
       </div>
@@ -107,7 +184,7 @@ export default function OrderTrackingPage({
           <p className="text-sm text-gray-500 mb-1">Items</p>
           <ul className="text-sm space-y-1">
             {order.items.map((item) => (
-              <li key={item.id} className="flex justify-between">
+              <li key={item.foodId} className="flex justify-between">
                 <span>
                   {item.name} x {item.quantity}
                 </span>
@@ -122,7 +199,7 @@ export default function OrderTrackingPage({
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Address</span>
-          <span className="font-medium text-right">{order.address}</span>
+          <span className="font-medium text-right">{formatAddress(order.address)}</span>
         </div>
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Payment</span>
@@ -132,5 +209,18 @@ export default function OrderTrackingPage({
         </div>
       </div>
     </div>
+  );
+}
+
+export default function OrderTrackingPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  return (
+    <ProtectedRoute>
+      <OrderTrackingContent id={id} />
+    </ProtectedRoute>
   );
 }

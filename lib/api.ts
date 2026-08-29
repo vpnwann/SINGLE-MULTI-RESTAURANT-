@@ -47,3 +47,12 @@ export async function getFood(
 
   return data.food ?? data;
 }
+
+
+
+
+
+
+
+
+
