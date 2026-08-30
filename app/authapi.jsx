@@ -32,14 +32,14 @@ export async function apiFetch(path, options = {}) {
 }
 
 export const authApi = {
-  register: (payload) =>
-    apiFetch("/api/auth/register", { method: "POST", body: JSON.stringify(payload) }),
-  verifyEmail: (payload) =>
-    apiFetch("/api/auth/verify-email", { method: "POST", body: JSON.stringify(payload) }),
-  resendVerification: (payload) =>
-    apiFetch("/api/auth/resend-verification", { method: "POST", body: JSON.stringify(payload) }),
-  login: (payload) =>
-    apiFetch("/api/auth/login", { method: "POST", body: JSON.stringify(payload) }),
+  // Step 1: send/resend a one-time code to this email (creates the user on first use).
+  requestOtp: (payload) =>
+    apiFetch("/api/auth/request-otp", { method: "POST", body: JSON.stringify(payload) }),
+  // Step 2: verify the code. Sets the auth cookie on success.
+  verifyOtp: (payload) =>
+    apiFetch("/api/auth/verify-otp", { method: "POST", body: JSON.stringify(payload) }),
+  resendOtp: (payload) =>
+    apiFetch("/api/auth/resend-otp", { method: "POST", body: JSON.stringify(payload) }),
   logout: () => apiFetch("/api/auth/logout", { method: "POST" }),
   me: () => apiFetch("/api/auth/me", { method: "GET" }),
 };

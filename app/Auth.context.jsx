@@ -25,24 +25,20 @@ export function AuthProvider({ children }) {
     refreshUser();
   }, [refreshUser]);
 
-  const login = async (email, password) => {
-    const res = await authApi.login({ email, password });
-    setUser(res.data);
-    return res.data;
+  // Step 1: send a one-time code to this email (works for both new and existing users).
+  const requestOtp = async (email) => {
+    return authApi.requestOtp({ email });
   };
 
-  const register = async (name, email, password) => {
-    return authApi.register({ name, email, password });
-  };
-
-  const verifyEmail = async (email, otp) => {
-    const res = await authApi.verifyEmail({ email, otp });
+  // Step 2: verify the code; on success the backend sets the auth cookie and returns the user.
+  const verifyOtp = async (email, otp) => {
+    const res = await authApi.verifyOtp({ email, otp });
     if (res.data) setUser(res.data);
     return res.data;
   };
 
-  const resendVerification = async (email) => {
-    return authApi.resendVerification({ email });
+  const resendOtp = async (email) => {
+    return authApi.resendOtp({ email });
   };
 
   const logout = async () => {
@@ -56,10 +52,9 @@ export function AuthProvider({ children }) {
         user,
         loading,
         isAuthenticated: !!user,
-        login,
-        register,
-        verifyEmail,
-        resendVerification,
+        requestOtp,
+        verifyOtp,
+        resendOtp,
         logout,
         refreshUser,
       }}

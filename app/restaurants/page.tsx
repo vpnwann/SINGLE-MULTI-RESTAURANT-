@@ -20,6 +20,22 @@ type Restaurant = {
   image?: string;
 };
 
+const fontStyles = (
+  <style jsx global>{`
+    @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap");
+    .font-display {
+      font-family: "Fraunces", serif;
+      font-optical-sizing: auto;
+    }
+    .font-body {
+      font-family: "Work Sans", sans-serif;
+    }
+    .font-data {
+      font-family: "IBM Plex Mono", monospace;
+    }
+  `}</style>
+);
+
 function RestaurantsContent() {
   const searchParams = useSearchParams();
   const categoryFromUrl = searchParams.get("category");
@@ -206,137 +222,214 @@ function RestaurantsContent() {
     sortByRating,
   ]);
 
+  const activeFilterCount =
+    (cuisine !== "All" ? 1 : 0) +
+    (minRating > 0 ? 1 : 0) +
+    (sortByRating ? 1 : 0);
+
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
+    <div className="min-h-screen bg-[#F6F1E7] font-body">
+      {fontStyles}
 
-      {/* Title */}
-      <h1 className="text-2xl font-bold mb-4">
-        All Restaurants
-      </h1>
+      <div className="max-w-5xl mx-auto px-4 py-8">
 
-      {/* Filters */}
-      <div className="flex flex-col sm:flex-row gap-3 mb-6">
-
-        {/* Search */}
-        <input
-          value={search}
-          onChange={(e) =>
-            setSearch(e.target.value)
-          }
-          placeholder="Search restaurants or cuisines..."
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 outline-none focus:border-orange-500"
-        />
-
-        {/* Cuisine */}
-        <select
-          value={cuisine}
-          onChange={(e) =>
-            setCuisine(e.target.value)
-          }
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-        >
-          {cuisines.map((c) => (
-            <option
-              key={c}
-              value={c}
-            >
-              {c}
-            </option>
-          ))}
-        </select>
-
-        {/* Rating */}
-        <select
-          value={minRating}
-          onChange={(e) =>
-            setMinRating(
-              Number(e.target.value)
-            )
-          }
-          className="border border-gray-300 rounded-lg px-3 py-2 text-sm"
-        >
-          <option value={0}>
-            All ratings
-          </option>
-
-          <option value={4}>
-            4+ stars
-          </option>
-
-          <option value={4.3}>
-            4.3+ stars
-          </option>
-
-          <option value={4.5}>
-            4.5+ stars
-          </option>
-        </select>
-
-        {/* Sort */}
-        <button
-          onClick={() =>
-            setSortByRating(
-              (current) => !current
-            )
-          }
-          className={`text-sm px-3 py-2 rounded-lg border ${
-            sortByRating
-              ? "bg-orange-600 text-white border-orange-600"
-              : "border-gray-300"
-          }`}
-        >
-          Sort by rating
-        </button>
-      </div>
-
-      {/* Loading */}
-      {loading && (
-        <div className="py-10 text-center text-gray-500">
-          Loading restaurants...
+        {/* Title */}
+        <div className="mb-6">
+        
+          <h1 className="font-display text-3xl font-semibold text-[#1C1B1A]">
+           SavourHighStreet
+          </h1>
         </div>
-      )}
 
-      {/* Error */}
-      {!loading && error && (
-        <div className="py-10 text-center">
-          <p className="text-red-500 text-sm">
-            {error}
-          </p>
+        {/* Filters */}
+        <div className="bg-white border border-[#E7E1D3] rounded-lg p-3 mb-6">
+          <div className="flex flex-col sm:flex-row gap-2.5">
 
-          <button
-            onClick={() =>
-              window.location.reload()
-            }
-            className="mt-3 px-4 py-2 bg-orange-600 text-white rounded-lg text-sm"
-          >
-            Try Again
-          </button>
-        </div>
-      )}
-
-      {/* No results */}
-      {!loading &&
-        !error &&
-        filtered.length === 0 && (
-          <p className="text-gray-500 text-sm">
-            No restaurants match your
-            filters. Try clearing them.
-          </p>
-        )}
-
-      {/* Results */}
-      {!loading &&
-        !error &&
-        filtered.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-            {filtered.map((restaurant) => (
-              <RestaurantCard
-                key={restaurant.id}
-                restaurant={restaurant}
+            {/* Search */}
+            <div className="relative flex-1">
+              <svg
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8A8578]"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 1 1 4 10.5a6.5 6.5 0 0 1 13 0Z"
+                />
+              </svg>
+              <input
+                value={search}
+                onChange={(e) =>
+                  setSearch(e.target.value)
+                }
+                placeholder="Search restaurants or cuisines"
+                className="w-full border border-[#E7E1D3] rounded-md pl-10 pr-4 py-2 text-sm text-[#1C1B1A] outline-none focus:border-[#B8481E] transition-colors"
               />
+            </div>
+
+            {/* Cuisine */}
+            <select
+              value={cuisine}
+              onChange={(e) =>
+                setCuisine(e.target.value)
+              }
+              className="border border-[#E7E1D3] rounded-md px-3 py-2 text-sm text-[#1C1B1A] outline-none focus:border-[#B8481E] transition-colors bg-white"
+            >
+              {cuisines.map((c) => (
+                <option
+                  key={c}
+                  value={c}
+                >
+                  {c}
+                </option>
+              ))}
+            </select>
+
+            {/* Rating */}
+            <select
+              value={minRating}
+              onChange={(e) =>
+                setMinRating(
+                  Number(e.target.value)
+                )
+              }
+              className="border border-[#E7E1D3] rounded-md px-3 py-2 text-sm text-[#1C1B1A] outline-none focus:border-[#B8481E] transition-colors bg-white"
+            >
+              <option value={0}>
+                All ratings
+              </option>
+
+              <option value={4}>
+                4+ stars
+              </option>
+
+              <option value={4.3}>
+                4.3+ stars
+              </option>
+
+              <option value={4.5}>
+                4.5+ stars
+              </option>
+            </select>
+
+            {/* Sort */}
+            <button
+              onClick={() =>
+                setSortByRating(
+                  (current) => !current
+                )
+              }
+              className={`text-sm px-4 py-2 rounded-md border font-medium transition-colors whitespace-nowrap ${
+                sortByRating
+                  ? "bg-[#B8481E] text-white border-[#B8481E]"
+                  : "border-[#E7E1D3] text-[#1C1B1A] hover:border-[#B8481E]"
+              }`}
+            >
+              Sort by rating
+            </button>
+          </div>
+
+          {activeFilterCount > 0 && (
+            <div className="flex items-center gap-2 mt-2.5 pt-2.5 border-t border-[#EFEAE0]">
+              <span className="font-data text-xs text-[#8A8578]">
+                {activeFilterCount}{" "}
+                {activeFilterCount === 1
+                  ? "filter"
+                  : "filters"}{" "}
+                active
+              </span>
+              <button
+                onClick={() => {
+                  setCuisine("All");
+                  setMinRating(0);
+                  setSortByRating(false);
+                }}
+                className="text-xs text-[#B8481E] hover:text-[#8f3717] font-medium"
+              >
+                Clear all
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Loading */}
+        {loading && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-lg border border-[#E7E1D3] bg-white overflow-hidden animate-pulse"
+              >
+                <div className="h-32 bg-[#EDE7D9]" />
+                <div className="p-4 space-y-2">
+                  <div className="h-3.5 w-3/4 bg-[#EDE7D9] rounded" />
+                  <div className="h-3 w-1/2 bg-[#EDE7D9] rounded" />
+                </div>
+              </div>
             ))}
           </div>
         )}
+
+        {/* Error */}
+        {!loading && error && (
+          <div className="py-10 px-6 text-center bg-white rounded-lg border border-[#E7E1D3]">
+            <p className="font-display text-base text-[#1C1B1A] mb-1">
+              Something didn't load
+            </p>
+            <p className="text-sm text-[#8A8578] mb-4">
+              {error}
+            </p>
+
+            <button
+              onClick={() =>
+                window.location.reload()
+              }
+              className="px-5 py-2.5 bg-[#B8481E] text-white rounded-md text-sm font-medium hover:bg-[#8f3717] transition-colors"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* No results */}
+        {!loading &&
+          !error &&
+          filtered.length === 0 && (
+            <div className="py-10 text-center bg-white rounded-lg border border-dashed border-[#E7E1D3]">
+              <p className="font-display text-base text-[#1C1B1A] mb-1">
+                No matches
+              </p>
+              <p className="text-sm text-[#8A8578]">
+                No restaurants match your filters. Try clearing them.
+              </p>
+            </div>
+          )}
+
+        {/* Results */}
+        {!loading &&
+          !error &&
+          filtered.length > 0 && (
+            <>
+              <p className="font-data text-xs text-[#8A8578] mb-3">
+                {filtered.length}{" "}
+                {filtered.length === 1
+                  ? "result"
+                  : "results"}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                {filtered.map((restaurant) => (
+                  <RestaurantCard
+                    key={restaurant.id}
+                    restaurant={restaurant}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+      </div>
     </div>
   );
 }
@@ -345,8 +438,18 @@ export default function RestaurantsPage() {
   return (
     <Suspense
       fallback={
-        <div className="max-w-5xl mx-auto px-4 py-8">
-          Loading...
+        <div className="min-h-screen bg-[#F6F1E7]">
+          <div className="max-w-5xl mx-auto px-4 py-8">
+            <div className="h-8 w-48 bg-[#EDE7D9] rounded animate-pulse mb-6" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="h-44 rounded-lg bg-white border border-[#E7E1D3] animate-pulse"
+                />
+              ))}
+            </div>
+          </div>
         </div>
       }
     >
