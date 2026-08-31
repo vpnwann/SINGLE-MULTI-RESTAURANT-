@@ -16,7 +16,7 @@
 import { apiFetch } from "./razorapi";
 
 export const RAZORPAY_KEY_ID =
-  process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_placeholder_key";
+  process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "rzp_test_TVzDcqbqGC7JXu";
 
 export const RAZORPAY_SCRIPT_URL = "https://checkout.razorpay.com/v1/checkout.js";
 
