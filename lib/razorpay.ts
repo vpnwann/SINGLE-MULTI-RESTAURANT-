@@ -1,15 +1,16 @@
 /**
  * Razorpay integration helpers, backed by a real Express server.
  *
- *  - POST /api/razorpay/create-order  -> creates a real Razorpay order,
- *    returns { orderId, amount, currency }
- *  - POST /api/razorpay/verify-payment -> verifies the HMAC SHA256
- *    signature server-side, returns { verified: boolean }
+ *  - POST /api/razorpay/create-order   -> takes { restaurantId, items, couponCode? },
+ *    recomputes the total server-side (never trusts a client-supplied amount),
+ *    creates a real Razorpay order, returns { orderId, amount, currency }.
+ *  - POST /api/razorpay/verify-payment -> verifies the HMAC SHA256 signature,
+ *    then independently confirms the payment with Razorpay's API and checks
+ *    it against the order this user created, returns { verified: boolean }.
  *
- * The actual security boundary is POST /api/orders, which independently
- * re-verifies the signature before persisting paymentStatus: "Paid" — so
- * verifyPaymentOnServer here is for fast UI feedback, not the source of
- * truth.
+ * There is no webhook in this setup, so verify-payment IS the security
+ * boundary here — it re-fetches the payment from Razorpay server-side rather
+ * than trusting the client's claim that payment succeeded.
  */
 
 import { apiFetch } from "./razorapi";
@@ -25,9 +26,24 @@ export interface RazorpaySuccessResponse {
   razorpay_signature: string;
 }
 
+export interface CreateOrderItem {
+  foodId: number;
+  quantity: number;
+}
+
+export interface OrderAddress {
+  name: string;
+  address: string;
+  city: string;
+  pincode: string;
+  phone: string;
+}
+
 export interface CreateOrderParams {
-  amountInRupees: number;
-  receipt: string;
+  restaurantId: number;
+  items: CreateOrderItem[];
+  couponCode?: string;
+  address: OrderAddress;
 }
 
 export interface CreateOrderResult {
@@ -69,7 +85,11 @@ export function loadRazorpayScript(): Promise<boolean> {
   });
 }
 
-/** Calls POST /api/razorpay/create-order to get a real Razorpay order_id. */
+/**
+ * Calls POST /api/razorpay/create-order with the cart contents (not an
+ * amount) — the server looks up prices itself and computes the real total,
+ * so there's nothing here for a client to tamper with.
+ */
 export async function createOrderOnServer(
   params: CreateOrderParams
 ): Promise<CreateOrderResult> {
@@ -80,7 +100,11 @@ export async function createOrderOnServer(
   return res.data;
 }
 
-/** Calls POST /api/razorpay/verify-payment to check the HMAC signature. */
+/**
+ * Calls POST /api/razorpay/verify-payment. The server checks the signature,
+ * then independently confirms with Razorpay that the payment captured for
+ * the expected amount before reporting `verified: true`.
+ */
 export async function verifyPaymentOnServer(
   response: RazorpaySuccessResponse
 ): Promise<boolean> {

@@ -6,6 +6,8 @@ import {
   createOrderOnServer,
   verifyPaymentOnServer,
   RAZORPAY_KEY_ID,
+  type CreateOrderItem,
+  type OrderAddress,
 } from "@/lib/razorpay";
 
 export interface RazorpaySuccessDetails {
@@ -15,25 +17,36 @@ export interface RazorpaySuccessDetails {
 }
 
 interface RazorpayCheckoutProps {
-  amount: number; // in rupees
+  // NOTE: no `amount` prop — the server recomputes the total from
+  // restaurantId + items and that's what actually gets charged. Passing
+  // an amount in from here would just be a display number with no
+  // enforcement, and it's one less thing that can drift out of sync with
+  // what the backend actually charges.
+  restaurantId: number;
+  items: CreateOrderItem[];
+  couponCode?: string;
+  address: OrderAddress;
   name: string;
   description: string;
-  receipt: string; // unique per checkout attempt, e.g. cart/restaurant id
   prefillName?: string;
   prefillContact?: string;
   onSuccess: (details: RazorpaySuccessDetails) => void;
   onFailure?: (reason: string) => void;
+  disabled?: boolean;
 }
 
 export default function RazorpayCheckout({
-  amount,
+  restaurantId,
+  items,
+  couponCode,
+  address,
   name,
   description,
-  receipt,
   prefillName,
   prefillContact,
   onSuccess,
   onFailure,
+  disabled,
 }: RazorpayCheckoutProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -48,9 +61,10 @@ export default function RazorpayCheckout({
         throw new Error("Could not load the payment provider. Check your connection and try again.");
       }
 
-      // Real order_id from the backend — required by Razorpay Checkout
-      // and what makes the payment referenceable/verifiable afterward.
-      const order = await createOrderOnServer({ amountInRupees: amount, receipt });
+      // Real order_id from the backend, created against a server-computed
+      // total — required by Razorpay Checkout and what makes the payment
+      // referenceable/verifiable afterward.
+      const order = await createOrderOnServer({ restaurantId, items, couponCode, address });
 
       const razorpay = new window.Razorpay({
         key: RAZORPAY_KEY_ID,
@@ -111,10 +125,10 @@ export default function RazorpayCheckout({
     <div>
       <button
         onClick={handlePay}
-        disabled={loading}
+        disabled={loading || disabled}
         className="w-full bg-orange-600 text-white font-medium py-3 rounded-lg hover:bg-orange-700 disabled:opacity-60"
       >
-        {loading ? "Processing payment..." : `Pay ₹${amount.toFixed(0)}`}
+        {loading ? "Processing payment..." : "Pay online"}
       </button>
       {error && <p className="text-sm text-red-600 mt-2">{error}</p>}
       <p className="text-xs text-gray-400 mt-2 text-center">

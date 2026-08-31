@@ -27,6 +27,7 @@ interface OrderAddress {
   address: string;
   city: string;
   pincode: string;
+  phone?: string;
 }
 
 interface Order {
@@ -41,7 +42,7 @@ interface Order {
   gst: number;
   total: number;
   couponCode: string | null;
-  address: OrderAddress;
+  address: OrderAddress | string;
   paymentMethod: "COD" | "RAZORPAY";
   paymentStatus: "Pending" | "Paid";
   orderStatus: OrderStatus;
@@ -60,15 +61,56 @@ const STATUS_STEPS: OrderStatus[] = [
   "Delivered",
 ];
 
+// Some pg setups / older rows can hand back the jsonb address column as a
+// raw JSON string rather than an already-parsed object. Normalize it here
+// so name/phone/etc. always render correctly instead of dumping raw JSON.
+function parseAddress(address: OrderAddress | string): OrderAddress | null {
+  if (typeof address !== "string") return address;
+  try {
+    return JSON.parse(address);
+  } catch {
+    return null; // genuinely not JSON — truly legacy/plain-text address
+  }
+}
+
 function formatAddress(address: OrderAddress | string): string {
-  if (typeof address === "string") return address; // fallback for any legacy shape
-  return `${address.name}, ${address.address}, ${address.city} - ${address.pincode}`;
+  const parsed = parseAddress(address);
+  if (!parsed) return typeof address === "string" ? address : "";
+  return `${parsed.name}, ${parsed.address}, ${parsed.city} - ${parsed.pincode}`;
+}
+
+// Order date/time, formatted for the user's locale. Falls back to the
+// raw string if createdAt is missing or unparsable so we never crash
+// the page over a display detail.
+function formatOrderDate(createdAt: string | undefined): string {
+  if (!createdAt) return "—";
+  const date = new Date(createdAt);
+  if (isNaN(date.getTime())) return createdAt;
+  return date.toLocaleString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
+function PaymentStatusBadge({ status }: { status: Order["paymentStatus"] }) {
+  const isPaid = status === "Paid";
+  return (
+    <span
+      className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+        isPaid ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"
+      }`}
+    >
+      {status}
+    </span>
+  );
 }
 
 function OrderTrackingContent({ id }: { id: string }) {
   const [order, setOrder] = useState<Order | null | undefined>(undefined);
   const [error, setError] = useState<string | null>(null);
-  const [advancing, setAdvancing] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,24 +136,6 @@ function OrderTrackingContent({ id }: { id: string }) {
     };
   }, [id]);
 
-  const advanceStatus = async () => {
-    if (!order) return;
-    const currentIndex = STATUS_STEPS.indexOf(order.orderStatus);
-    if (currentIndex === -1 || currentIndex === STATUS_STEPS.length - 1) return;
-    const nextStatus = STATUS_STEPS[currentIndex + 1];
-
-    setAdvancing(true);
-    setError(null);
-    try {
-      const res = await ordersApi.updateStatus(order.id, nextStatus);
-      setOrder(res.data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not update order status");
-    } finally {
-      setAdvancing(false);
-    }
-  };
-
   if (order === undefined) {
     return <div className="max-w-xl mx-auto px-4 py-16 text-center">Loading...</div>;
   }
@@ -131,7 +155,7 @@ function OrderTrackingContent({ id }: { id: string }) {
   }
 
   const currentIndex = STATUS_STEPS.indexOf(order.orderStatus);
-  const isDelivered = order.orderStatus === "Delivered";
+  const parsedAddress = parseAddress(order.address);
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
@@ -139,8 +163,16 @@ function OrderTrackingContent({ id }: { id: string }) {
         ← Back to orders
       </Link>
 
-      <h1 className="text-2xl font-bold mt-2">{order.restaurantName}</h1>
-      <p className="text-xs text-gray-400">{order.id}</p>
+      <div className="flex items-start justify-between mt-2">
+        <div>
+          <h1 className="text-2xl font-bold">{order.restaurantName}</h1>
+          <p className="text-xs text-gray-400">Order #{order.id}</p>
+        </div>
+        <PaymentStatusBadge status={order.paymentStatus} />
+      </div>
+      <p className="text-xs text-gray-400 mt-1">
+        Placed on {formatOrderDate(order.createdAt)}
+      </p>
 
       <div className="bg-white border border-gray-200 rounded-lg p-4 my-4">
         <h2 className="font-semibold mb-3">Order Status</h2>
@@ -167,16 +199,6 @@ function OrderTrackingContent({ id }: { id: string }) {
         </ol>
 
         {error && <p className="text-sm text-red-600 mt-3">{error}</p>}
-
-        {!isDelivered && (
-          <button
-            onClick={advanceStatus}
-            disabled={advancing}
-            className="mt-4 w-full bg-orange-600 text-white font-medium py-2.5 rounded-lg hover:bg-orange-700 disabled:opacity-60"
-          >
-            {advancing ? "Updating..." : "Next Status"}
-          </button>
-        )}
       </div>
 
       <div className="bg-white border border-gray-200 rounded-lg p-4 space-y-3">
@@ -193,6 +215,36 @@ function OrderTrackingContent({ id }: { id: string }) {
             ))}
           </ul>
         </div>
+
+        {/* Full price breakdown — subtotal through to the final total,
+            so the customer can see exactly what they were charged for. */}
+        <div className="border-t border-gray-100 pt-2 space-y-1 text-sm">
+          <div className="flex justify-between text-gray-500">
+            <span>Subtotal</span>
+            <span>{formatCurrency(order.subtotal)}</span>
+          </div>
+          <div className="flex justify-between text-gray-500">
+            <span>Delivery fee</span>
+            <span>{formatCurrency(order.deliveryFee)}</span>
+          </div>
+          <div className="flex justify-between text-gray-500">
+            <span>Platform fee</span>
+            <span>{formatCurrency(order.platformFee)}</span>
+          </div>
+          <div className="flex justify-between text-gray-500">
+            <span>GST</span>
+            <span>{formatCurrency(order.gst)}</span>
+          </div>
+          {order.discount > 0 && (
+            <div className="flex justify-between text-green-600">
+              <span>
+                Discount{order.couponCode ? ` (${order.couponCode})` : ""}
+              </span>
+              <span>-{formatCurrency(order.discount)}</span>
+            </div>
+          )}
+        </div>
+
         <div className="border-t border-gray-100 pt-2 flex justify-between font-semibold">
           <span>Total</span>
           <span>{formatCurrency(order.total)}</span>
@@ -201,6 +253,12 @@ function OrderTrackingContent({ id }: { id: string }) {
           <span className="text-gray-500">Address</span>
           <span className="font-medium text-right">{formatAddress(order.address)}</span>
         </div>
+        {parsedAddress?.phone && (
+          <div className="flex justify-between text-sm">
+            <span className="text-gray-500">Phone</span>
+            <span className="font-medium">{parsedAddress.phone}</span>
+          </div>
+        )}
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">Payment</span>
           <span className="font-medium">

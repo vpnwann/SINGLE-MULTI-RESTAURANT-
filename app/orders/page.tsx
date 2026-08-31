@@ -7,6 +7,22 @@ import { ordersApi } from "./orderapi";
 import { Order } from "@/types";
 import { formatCurrency } from "@/lib/calculations";
 
+// Handles the case where address comes back as a jsonb object already,
+// or (on some pg setups / legacy rows) as a raw JSON string. Returns
+// null if it's neither, so callers can just skip showing phone.
+function getPhone(address: Order["address"]): string | null {
+  if (!address) return null;
+  if (typeof address === "string") {
+    try {
+      const parsed = JSON.parse(address);
+      return parsed?.phone || null;
+    } catch {
+      return null;
+    }
+  }
+  return (address as { phone?: string }).phone || null;
+}
+
 function OrdersPageContent() {
   const [orders, setOrders] = useState<Order[] | null>(null);
   const [error, setError] = useState("");
@@ -63,30 +79,36 @@ function OrdersPageContent() {
     <div className="max-w-2xl mx-auto px-4 py-6">
       <h1 className="text-2xl font-bold mb-4">Your Orders</h1>
       <div className="space-y-3">
-        {orders.map((order) => (
-          <Link
-            key={order.id}
-            href={`/orders/${order.id}`}
-            className="block bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm"
-          >
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="font-semibold">{order.restaurantName}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">{order.id}</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {order.items.length} item(s) ·{" "}
-                  {new Date(order.createdAt).toLocaleDateString()}
-                </p>
+        {orders.map((order) => {
+          const phone = getPhone(order.address);
+          return (
+            <Link
+              key={order.id}
+              href={`/orders/${order.id}`}
+              className="block bg-white border border-gray-200 rounded-lg p-4 hover:shadow-sm"
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-semibold">{order.restaurantName}</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">{order.id}</p>
+                  <p className="text-sm text-gray-500 mt-1">
+                    {order.items.length} item(s) ·{" "}
+                    {new Date(order.createdAt).toLocaleDateString()}
+                  </p>
+                  {phone && (
+                    <p className="text-xs text-gray-400 mt-1">Phone: {phone}</p>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="font-semibold">{formatCurrency(order.total)}</p>
+                  <span className="inline-block mt-1 text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">
+                    {order.orderStatus}
+                  </span>
+                </div>
               </div>
-              <div className="text-right">
-                <p className="font-semibold">{formatCurrency(order.total)}</p>
-                <span className="inline-block mt-1 text-xs bg-orange-50 text-orange-700 px-2 py-0.5 rounded-full">
-                  {order.orderStatus}
-                </span>
-              </div>
-            </div>
-          </Link>
-        ))}
+            </Link>
+          );
+        })}
       </div>
     </div>
   );
