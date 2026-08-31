@@ -17,8 +17,12 @@ type OrderStatus =
 
 interface OrderItem {
   foodId: number;
-  name: string;
-  price: number;
+  // `name` and `price` are optional on the type because legacy orders
+  // (placed before items were denormalized at order-creation time) only
+  // ever persisted {foodId, quantity} — see renderItemLine() below for how
+  // those rows are handled without crashing into NaN/blank text.
+  name?: string;
+  price?: number;
   quantity: number;
 }
 
@@ -95,6 +99,27 @@ function formatOrderDate(createdAt: string | undefined): string {
   });
 }
 
+// Renders a single order-item line, tolerating rows saved before items were
+// denormalized with name/price at order-creation time (older orders in the
+// DB only have {foodId, quantity}). Rather than computing `undefined *
+// undefined` (→ NaN) or rendering a blank name, this falls back to a
+// generic label and an explicit "price unavailable" marker so the page
+// stays honest instead of showing a wrong or broken number.
+function renderItemLine(item: OrderItem) {
+  const hasPrice = typeof item.price === "number" && !isNaN(item.price);
+  const name = item.name?.trim() ? item.name : `Item #${item.foodId}`;
+  const lineTotal = hasPrice ? formatCurrency((item.price as number) * item.quantity) : "—";
+
+  return (
+    <li key={item.foodId} className="flex justify-between">
+      <span>
+        {name} x {item.quantity}
+      </span>
+      <span className={hasPrice ? "" : "text-gray-400 italic"}>{lineTotal}</span>
+    </li>
+  );
+}
+
 function PaymentStatusBadge({ status }: { status: Order["paymentStatus"] }) {
   const isPaid = status === "Paid";
   return (
@@ -156,6 +181,9 @@ function OrderTrackingContent({ id }: { id: string }) {
 
   const currentIndex = STATUS_STEPS.indexOf(order.orderStatus);
   const parsedAddress = parseAddress(order.address);
+  const hasLegacyItems = order.items.some(
+    (item) => typeof item.price !== "number" || isNaN(item.price) || !item.name
+  );
 
   return (
     <div className="max-w-xl mx-auto px-4 py-6">
@@ -205,15 +233,14 @@ function OrderTrackingContent({ id }: { id: string }) {
         <div>
           <p className="text-sm text-gray-500 mb-1">Items</p>
           <ul className="text-sm space-y-1">
-            {order.items.map((item) => (
-              <li key={item.foodId} className="flex justify-between">
-                <span>
-                  {item.name} x {item.quantity}
-                </span>
-                <span>₹{item.price * item.quantity}</span>
-              </li>
-            ))}
+            {order.items.map(renderItemLine)}
           </ul>
+          {hasLegacyItems && (
+            <p className="text-xs text-gray-400 mt-2">
+              Item names/prices aren&apos;t available for this order — see the
+              total below for what was charged.
+            </p>
+          )}
         </div>
 
         {/* Full price breakdown — subtotal through to the final total,
