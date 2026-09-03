@@ -63,13 +63,20 @@ export default function RazorpayCheckout({
   const [error, setError] = useState<string | null>(null);
 
   /*
-   * Native Expo -> Next.js result listener.
+   * ============================================================
+   * NATIVE EXPO -> NEXT.JS
+   * ============================================================
    *
-   * Expo opens native Razorpay and sends the result back into
-   * this WebView using webViewRef.current.postMessage(...).
+   * Native Razorpay has already completed the payment.
+   *
+   * IMPORTANT:
+   * We DO NOT verify the payment here.
+   *
+   * The parent checkout component's onSuccess() handles the
+   * existing verification + order confirmation flow.
    */
   useEffect(() => {
-    const handleNativeMessage = async (event: MessageEvent) => {
+    const handleNativeMessage = (event: MessageEvent) => {
       try {
         const raw = event.data;
 
@@ -79,26 +86,29 @@ export default function RazorpayCheckout({
 
         const data = JSON.parse(raw);
 
+        /*
+         * Native Razorpay SUCCESS
+         */
         if (data?.type === "RAZORPAY_SUCCESS") {
-          setLoading(true);
-          setError(null);
-
-          const verified = await verifyPaymentOnServer({
-            razorpay_payment_id: data.paymentId,
-            razorpay_order_id: data.razorpayOrderId,
-            razorpay_signature: data.razorpaySignature,
-          });
+          console.log("Native Razorpay success received:", data);
 
           setLoading(false);
+          setError(null);
 
-          if (!verified) {
-            setError(
-              "Payment verification failed. Please contact support before retrying."
-            );
-            onFailure?.("verification_failed");
-            return;
-          }
-
+          /*
+           * IMPORTANT:
+           *
+           * Pass the payment result to the SAME onSuccess()
+           * callback used by the normal browser checkout.
+           *
+           * Your parent component should then:
+           *
+           * 1. verify payment with Express
+           * 2. get internal order ID
+           * 3. clear cart
+           * 4. show "Order Placed"
+           * 5. redirect to /orders
+           */
           onSuccess({
             paymentId: data.paymentId,
             razorpayOrderId: data.razorpayOrderId,
@@ -108,7 +118,12 @@ export default function RazorpayCheckout({
           return;
         }
 
+        /*
+         * Native Razorpay FAILURE
+         */
         if (data?.type === "RAZORPAY_FAILURE") {
+          console.error("Native Razorpay failure:", data);
+
           setLoading(false);
 
           const message =
@@ -118,9 +133,15 @@ export default function RazorpayCheckout({
 
           setError(message);
           onFailure?.("payment_failed");
+
+          return;
         }
       } catch (err) {
         console.error("Native Razorpay message error:", err);
+
+        setLoading(false);
+        setError("Could not process the payment response.");
+        onFailure?.("payment_response_error");
       }
     };
 
@@ -141,19 +162,27 @@ export default function RazorpayCheckout({
        * EXPO / REACT NATIVE WEBVIEW
        * ============================================================
        *
-       * The Next.js page still creates the Razorpay order through
-       * your existing Express API. This is important because it
-       * preserves your existing authentication/server-side pricing.
+       * Create the order using your existing Express API.
        *
-       * Expo then opens the NATIVE Razorpay SDK using this order.
+       * Express creates:
+       *
+       * Razorpay order
+       * +
+       * your internal pending DB order
+       *
+       * Then Expo opens native Razorpay.
        */
       if (window.ReactNativeWebView) {
+        console.log("Running native Razorpay flow");
+
         const order = await createOrderOnServer({
           restaurantId,
           items,
           couponCode,
           address,
         });
+
+        console.log("Razorpay order created:", order.orderId);
 
         window.ReactNativeWebView.postMessage(
           JSON.stringify({
@@ -174,18 +203,28 @@ export default function RazorpayCheckout({
         );
 
         /*
-         * Do not set loading=false here.
-         * Expo will send either RAZORPAY_SUCCESS or
-         * RAZORPAY_FAILURE back to this WebView.
+         * Keep loading=true.
+         *
+         * Expo will send either:
+         *
+         * RAZORPAY_SUCCESS
+         *
+         * or
+         *
+         * RAZORPAY_FAILURE
+         *
+         * back to this WebView.
          */
+
         return;
       }
 
       /*
        * ============================================================
-       * NORMAL WEBSITE / BROWSER
+       * NORMAL WEBSITE / BROWSER RAZORPAY
        * ============================================================
        */
+
       const scriptLoaded = await loadRazorpayScript();
 
       if (!scriptLoaded || !window.Razorpay) {
@@ -194,6 +233,9 @@ export default function RazorpayCheckout({
         );
       }
 
+      /*
+       * Create the same server-side order used by native.
+       */
       const order = await createOrderOnServer({
         restaurantId,
         items,
@@ -203,6 +245,7 @@ export default function RazorpayCheckout({
 
       const razorpay = new window.Razorpay({
         key: RAZORPAY_KEY_ID,
+
         amount: order.amount,
         currency: order.currency,
         order_id: order.orderId,
@@ -219,6 +262,11 @@ export default function RazorpayCheckout({
           color: "#ea580c",
         },
 
+        /*
+         * Browser Razorpay success.
+         *
+         * This continues to use your existing verification flow.
+         */
         handler: async (response: unknown) => {
           try {
             const r = response as {
@@ -227,18 +275,26 @@ export default function RazorpayCheckout({
               razorpay_signature: string;
             };
 
+            console.log("Browser Razorpay success:", r);
+
             const verified = await verifyPaymentOnServer(r);
 
-            setLoading(false);
-
             if (!verified) {
+              setLoading(false);
+
               setError(
                 "Payment verification failed. Please contact support before retrying."
               );
+
               onFailure?.("verification_failed");
               return;
             }
 
+            setLoading(false);
+
+            /*
+             * Same success callback used by the parent checkout.
+             */
             onSuccess({
               paymentId: r.razorpay_payment_id,
               razorpayOrderId: r.razorpay_order_id,
@@ -248,7 +304,11 @@ export default function RazorpayCheckout({
             console.error("Razorpay verification error:", err);
 
             setLoading(false);
-            setError("Payment verification failed. Please contact support.");
+
+            setError(
+              "Payment verification failed. Please contact support."
+            );
+
             onFailure?.("verification_failed");
           }
         },
@@ -261,21 +321,30 @@ export default function RazorpayCheckout({
         },
       });
 
-      razorpay.on("payment.failed", (...args: unknown[]) => {
-        console.error("RAZORPAY PAYMENT FAILED:", args);
+      razorpay.on(
+        "payment.failed",
+        (...args: unknown[]) => {
+          console.error(
+            "RAZORPAY PAYMENT FAILED:",
+            args
+          );
 
-        setLoading(false);
-        setError(
-          "Payment failed. Please try another payment method."
-        );
-        onFailure?.("payment_failed");
-      });
+          setLoading(false);
+
+          setError(
+            "Payment failed. Please try another payment method."
+          );
+
+          onFailure?.("payment_failed");
+        }
+      );
 
       razorpay.open();
     } catch (err) {
       console.error("Payment error:", err);
 
       setLoading(false);
+
       setError(
         err instanceof Error
           ? err.message
@@ -293,7 +362,9 @@ export default function RazorpayCheckout({
         disabled={loading || disabled}
         className="w-full bg-orange-600 text-white font-medium py-3 rounded-lg hover:bg-orange-700 disabled:opacity-60"
       >
-        {loading ? "Processing payment..." : "Pay online"}
+        {loading
+          ? "Processing payment..."
+          : "Pay online"}
       </button>
 
       {error && (
@@ -308,4 +379,3 @@ export default function RazorpayCheckout({
     </div>
   );
 }
-
