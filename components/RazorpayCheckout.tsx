@@ -89,34 +89,57 @@ export default function RazorpayCheckout({
         /*
          * Native Razorpay SUCCESS
          */
-        if (data?.type === "RAZORPAY_SUCCESS") {
-          console.log("Native Razorpay success received:", data);
+    if (data?.type === "RAZORPAY_SUCCESS") {
+  console.log(
+    "========== RAZORPAY NATIVE SUCCESS RECEIVED =========="
+  );
 
-          setLoading(false);
-          setError(null);
+  console.log(
+    "Payment ID:",
+    data.paymentId
+  );
 
-          /*
-           * IMPORTANT:
-           *
-           * Pass the payment result to the SAME onSuccess()
-           * callback used by the normal browser checkout.
-           *
-           * Your parent component should then:
-           *
-           * 1. verify payment with Express
-           * 2. get internal order ID
-           * 3. clear cart
-           * 4. show "Order Placed"
-           * 5. redirect to /orders
-           */
-          onSuccess({
-            paymentId: data.paymentId,
-            razorpayOrderId: data.razorpayOrderId,
-            razorpaySignature: data.razorpaySignature,
-          });
+  console.log(
+    "Order ID:",
+    data.razorpayOrderId
+  );
 
-          return;
-        }
+  console.log(
+    "Signature:",
+    data.razorpaySignature
+  );
+
+  setLoading(false);
+  setError(null);
+
+  if (
+    !data.paymentId ||
+    !data.razorpayOrderId ||
+    !data.razorpaySignature
+  ) {
+    setError(
+      "Razorpay returned an incomplete payment response."
+    );
+
+    onFailure?.(
+      "invalid_payment_response"
+    );
+
+    return;
+  }
+
+  onSuccess({
+    paymentId: data.paymentId,
+
+    razorpayOrderId:
+      data.razorpayOrderId,
+
+    razorpaySignature:
+      data.razorpaySignature,
+  });
+
+  return;
+}
 
         /*
          * Native Razorpay FAILURE
