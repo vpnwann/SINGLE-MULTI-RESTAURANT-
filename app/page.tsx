@@ -97,47 +97,131 @@ export default function HomePage() {
       `}</style>
 
       {/* Header band */}
-      <header className="bg-[#1C1B1A] font-body">
-        <div className="max-w-5xl mx-auto px-4 pt-10 pb-8">
-          <div className="flex items-baseline gap-2">
-            <span className="w-2 h-2 rounded-full bg-[#B8481E]" />
-            <p className="text-[11px] uppercase tracking-[0.2em] text-[#C9C4B8]">
-              On the high street
-            </p>
-          </div>
+      
+<header className="bg-[#1C1B1A] font-body">
+  <div className="max-w-5xl mx-auto px-4 pt-10 pb-8">
+    <div className="flex items-baseline gap-2">
+      <span className="w-2 h-2 rounded-full bg-[#B8481E]" />
+      <p className="text-[11px] uppercase tracking-[0.2em] text-[#C9C4B8]">
+        On the high street
+      </p>
+    </div>
 
-          <h1 className="font-display text-4xl sm:text-5xl font-semibold text-[#F6F1E7] mt-2">
-            SavourHighStreet
-          </h1>
+    <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-5">
+      <div>
+        <h1 className="font-display text-4xl sm:text-5xl font-semibold text-[#F6F1E7] mt-2">
+          SavourHighStreet
+        </h1>
 
-          <p className="text-sm text-[#9C978A] mt-1">
-            Order from the kitchens on your doorstep.
-          </p>
+        <p className="text-sm text-[#9C978A] mt-1">
+          Order from the kitchens on your doorstep.
+        </p>
+      </div>
 
-          <div className="max-w-md mt-6 relative">
-            <svg
-              className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9C978A]"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 1 1 4 10.5a6.5 6.5 0 0 1 13 0Z"
-              />
-            </svg>
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search restaurants or cuisines"
-              className="w-full bg-[#26241F] text-[#F6F1E7] placeholder:text-[#8A8578] rounded-md pl-10 pr-4 py-3 text-sm outline-none border border-[#3A3730] focus:border-[#B8481E] transition-colors"
+      {/* Contact & Social Links */}
+      <div className="flex items-center gap-2">
+        {/* WhatsApp */}
+        <a
+          href="https://wa.me/919999999999"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="WhatsApp"
+          className="flex items-center gap-2 bg-[#26241F] border border-[#3A3730] text-[#F6F1E7] hover:border-[#B8481E] hover:bg-[#302D27] rounded-md px-3 py-2 text-sm transition-colors"
+        >
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+          >
+            <path d="M20.5 3.5A11.8 11.8 0 0 0 12.1 0C5.5 0 .2 5.3.2 11.9c0 2.1.6 4.2 1.6 6L.1 24l6.3-1.7c1.7.9 3.7 1.4 5.7 1.4h.1c6.6 0 11.9-5.3 11.9-11.9 0-3.2-1.3-6.1-3.6-8.3ZM12.1 21.7c-1.8 0-3.5-.5-5-1.3l-.4-.2-3.7 1 1-3.6-.2-.4c-1-1.6-1.5-3.4-1.5-5.3C2.3 6.5 6.7 2.1 12.1 2.1c2.6 0 5.1 1 6.9 2.8 1.8 1.8 2.8 4.3 2.8 6.9 0 5.5-4.4 9.9-9.7 9.9Zm5.4-7.4c-.3-.2-1.8-.9-2.1-1-.3-.1-.5-.2-.7.2-.2.3-.8 1-1 1.2-.2.2-.4.2-.7.1-1.8-.9-3-1.6-4.2-3.6-.3-.5.3-.5.8-1.7.1-.2.1-.4 0-.6-.1-.2-.7-1.7-.9-2.3-.2-.6-.5-.5-.7-.5h-.6c-.2 0-.6.1-.9.4-.3.3-1.1 1.1-1.1 2.6s1.1 3 1.2 3.2c.1.2 2.1 3.2 5.1 4.5 1.9.8 2.7.9 3.7.8.6-.1 1.8-.7 2.1-1.4.3-.7.3-1.3.2-1.4-.1-.2-.3-.3-.6-.4Z" />
+          </svg>
+          <span className="hidden sm:inline">WhatsApp</span>
+        </a>
+
+        {/* Instagram */}
+        <a
+          href="https://instagram.com/savourhighstreet"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Instagram"
+          className="flex items-center gap-2 bg-[#26241F] border border-[#3A3730] text-[#F6F1E7] hover:border-[#B8481E] hover:bg-[#302D27] rounded-md px-3 py-2 text-sm transition-colors"
+        >
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <rect x="3" y="3" width="18" height="18" rx="5" />
+            <circle cx="12" cy="12" r="4" />
+            <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none" />
+          </svg>
+          <span className="hidden sm:inline">Instagram</span>
+        </a>
+
+        {/* Call */}
+        <a
+          href="tel:+919999999999"
+          aria-label="Call us"
+          className="flex items-center gap-2 bg-[#B8481E] text-[#F6F1E7] hover:bg-[#A43F19] rounded-md px-3 py-2 text-sm transition-colors"
+        >
+          <svg
+            className="w-4 h-4"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M22 16.92v3a2 2 0 0 1-2.18 2
+              19.79 19.79 0 0 1-8.63-3.07
+              19.5 19.5 0 0 1-6-6
+              A19.79 19.79 0 0 1 2.12 4.18
+              2 2 0 0 1 4.11 2h3
+              a2 2 0 0 1 2 1.72
+              12.84 12.84 0 0 0 .7 2.81
+              2 2 0 0 1-.45 2.11L8.09 9.91
+              a16 16 0 0 0 6 6l1.27-1.27
+              a2 2 0 0 1 2.11-.45
+              12.84 12.84 0 0 0 2.81.7
+              A2 2 0 0 1 22 16.92Z"
             />
-          </div>
-        </div>
-      </header>
+          </svg>
+          <span className="hidden sm:inline">Call</span>
+        </a>
+      </div>
+    </div>
+
+    {/* Search */}
+    <div className="max-w-md mt-6 relative">
+      <svg
+        className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9C978A]"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+        strokeWidth={2}
+      >
+        <path
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          d="M21 21l-4.35-4.35M17 10.5A6.5 6.5 0 1 1 4 10.5a6.5 6.5 0 0 1 13 0Z"
+        />
+      </svg>
+
+      <input
+        type="text"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Search restaurants or cuisines"
+        className="w-full bg-[#26241F] text-[#F6F1E7] placeholder:text-[#8A8578] rounded-md pl-10 pr-4 py-3 text-sm outline-none border border-[#3A3730] focus:border-[#B8481E] transition-colors"
+      />
+    </div>
+  </div>
+</header>
+
 
       <div className="max-w-5xl mx-auto px-4 py-8 font-body">
         {/* Categories */}
@@ -251,6 +335,11 @@ export default function HomePage() {
             )}
         </section>
       </div>
+
+
+
+
+      
     </div>
   );
 }

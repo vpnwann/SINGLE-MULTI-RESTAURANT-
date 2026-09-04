@@ -17,6 +17,10 @@ export default function Navbar() {
     { href: "/cart", label: "Cart", icon: ShoppingCart },
   ];
 
+  if (pathname.startsWith("/admin")) {
+    return null;
+  }
+
   return (
     <>
       {/* Bottom Navigation */}
