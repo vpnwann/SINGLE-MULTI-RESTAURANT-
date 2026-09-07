@@ -1,73 +1,186 @@
+
 "use client";
 
 import { useEffect } from "react";
 
 /**
- * Listens for messages the React Native WebView shell injects via
- * injectJavaScript (see HomeScreen.tsx -> sendToWebView). Renders nothing;
- * mount it once near the root of the app.
+ * Receives messages injected by the React Native WebView shell.
+ *
+ * React Native -> Next.js:
+ *   injectJavaScript()
+ *     -> window.dispatchEvent(new CustomEvent("nativeMessage", ...))
  *
  * Handles:
- * - PUSH_TOKEN_REGISTERED: save the Expo push token against the logged-in user
- *
- * If you already have message handling for RAZORPAY_SUCCESS / RAZORPAY_FAILURE
- * / DEEP_LINK / NOTIFICATION_TAPPED elsewhere, move that logic into this same
- * listener instead of running two "message" listeners side by side.
+ * - PUSH_TOKEN_REGISTERED
  */
 export default function NativeBridge() {
   useEffect(() => {
-    // If the token arrives before the user is logged in, stash it and
-    // retry once an auth cookie/session exists. Simple in-memory retry;
-    // swap for your actual auth-ready signal if you have one.
     let pendingToken: string | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
+    /**
+     * Save the Expo push token through the Next.js API.
+     */
     const savePushToken = async (token: string) => {
-  console.log("🚀 Saving token to API:", token);
+      console.log("🚀 Saving push token to API:", token);
 
-  try {
-    const res = await fetch("/api/users/push-token", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      credentials: "include",
-      body: JSON.stringify({ token }),
-    });
+      try {
+        const res = await fetch("/api/users/push-token", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+          body: JSON.stringify({
+            token,
+          }),
+        });
 
-    console.log("🚀 API response:", res.status);
+        console.log("🚀 Push token API status:", res.status);
 
-    const text = await res.text();
-    console.log("🚀 API response body:", text);
-  } catch (err) {
-    console.error("❌ API error:", err);
-  }
-};
+        const text = await res.text();
 
-   const handleMessage = (event: MessageEvent) => {
-  console.log("🔥 NativeBridge received:", event.data);
+        console.log("🚀 Push token API response:", text);
 
-  let data;
+        if (res.status === 401) {
+          console.log(
+            "⚠️ User is not authenticated yet. Will retry."
+          );
 
-  try {
-    data =
-      typeof event.data === "string"
-        ? JSON.parse(event.data)
-        : event.data;
-  } catch (err) {
-    console.log("❌ Could not parse native message:", event.data);
-    return;
-  }
+          pendingToken = token;
 
-  console.log("🔥 Parsed native message:", data);
+          if (retryTimer) {
+            clearTimeout(retryTimer);
+          }
 
-  if (data?.type === "PUSH_TOKEN_REGISTERED" && data.token) {
-    console.log("🔥 PUSH TOKEN RECEIVED:", data.token);
-    savePushToken(data.token);
-  }
-};
+          retryTimer = setTimeout(() => {
+            if (pendingToken) {
+              savePushToken(pendingToken);
+            }
+          }, 5000);
 
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
+          return;
+        }
+
+        if (!res.ok) {
+          console.error(
+            "❌ Failed to save push token:",
+            res.status,
+            text
+          );
+
+          return;
+        }
+
+        console.log("✅ Expo push token saved successfully.");
+
+        pendingToken = null;
+
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+          retryTimer = null;
+        }
+      } catch (error) {
+        console.error(
+          "❌ Push token API request failed:",
+          error
+        );
+
+        // Retry network failures.
+        pendingToken = token;
+
+        if (retryTimer) {
+          clearTimeout(retryTimer);
+        }
+
+        retryTimer = setTimeout(() => {
+          if (pendingToken) {
+            savePushToken(pendingToken);
+          }
+        }, 5000);
+      }
+    };
+
+    /**
+     * React Native -> Next.js custom event.
+     *
+     * React Native injects:
+     *
+     * window.dispatchEvent(
+     *   new CustomEvent("nativeMessage", {
+     *     detail: JSON.stringify(message)
+     *   })
+     * )
+     */
+    const handleNativeMessage = (event: Event) => {
+      const customEvent = event as CustomEvent;
+
+      console.log(
+        "🔥 NEXT.JS RECEIVED NATIVE MESSAGE:",
+        customEvent.detail
+      );
+
+      let data: any;
+
+      try {
+        const raw = customEvent.detail;
+
+        data =
+          typeof raw === "string"
+            ? JSON.parse(raw)
+            : raw;
+      } catch (error) {
+        console.error(
+          "❌ Could not parse native message:",
+          customEvent.detail
+        );
+
+        return;
+      }
+
+      console.log(
+        "🔥 PARSED NATIVE MESSAGE:",
+        data
+      );
+
+      /**
+       * Expo push token
+       */
+      if (
+        data?.type === "PUSH_TOKEN_REGISTERED" &&
+        typeof data.token === "string" &&
+        data.token.length > 0
+      ) {
+        console.log(
+          "🔥 PUSH TOKEN RECEIVED BY NEXT.JS:",
+          data.token
+        );
+
+        pendingToken = data.token;
+
+        savePushToken(data.token);
+      }
+    };
+
+    console.log(
+      "✅ NativeBridge mounted and listening for nativeMessage"
+    );
+
+    window.addEventListener(
+      "nativeMessage",
+      handleNativeMessage
+    );
+
+    return () => {
+      window.removeEventListener(
+        "nativeMessage",
+        handleNativeMessage
+      );
+
+      if (retryTimer) {
+        clearTimeout(retryTimer);
+      }
+    };
   }, []);
 
   return null;
