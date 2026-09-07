@@ -22,50 +22,49 @@ export default function NativeBridge() {
     let pendingToken: string | null = null;
 
     const savePushToken = async (token: string) => {
-      try {
-        const res = await fetch("/api/users/push-token", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ token }),
-        });
+  console.log("🚀 Saving token to API:", token);
 
-        if (res.status === 401) {
-          // Not logged in yet — remember it and try again shortly.
-          pendingToken = token;
-          setTimeout(() => {
-            if (pendingToken) savePushToken(pendingToken);
-          }, 5000);
-          return;
-        }
+  try {
+    const res = await fetch("/api/users/push-token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      credentials: "include",
+      body: JSON.stringify({ token }),
+    });
 
-        if (!res.ok) {
-          console.error("Failed to save push token, status:", res.status);
-          return;
-        }
+    console.log("🚀 API response:", res.status);
 
-        pendingToken = null;
-      } catch (err) {
-        console.error("Failed to save push token:", err);
-      }
-    };
+    const text = await res.text();
+    console.log("🚀 API response body:", text);
+  } catch (err) {
+    console.error("❌ API error:", err);
+  }
+};
 
-    const handleMessage = (event: MessageEvent) => {
-      let data: any;
-      try {
-        data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-      } catch {
-        return; // not JSON from the native bridge, ignore
-      }
+   const handleMessage = (event: MessageEvent) => {
+  console.log("🔥 NativeBridge received:", event.data);
 
-      if (data?.type === "PUSH_TOKEN_REGISTERED" && data.token) {
-        savePushToken(data.token);
-      }
+  let data;
 
-      // Add other native -> web message types here (RAZORPAY_SUCCESS,
-      // RAZORPAY_FAILURE, DEEP_LINK, NOTIFICATION_TAPPED) if they aren't
-      // already handled by a listener elsewhere in the app.
-    };
+  try {
+    data =
+      typeof event.data === "string"
+        ? JSON.parse(event.data)
+        : event.data;
+  } catch (err) {
+    console.log("❌ Could not parse native message:", event.data);
+    return;
+  }
+
+  console.log("🔥 Parsed native message:", data);
+
+  if (data?.type === "PUSH_TOKEN_REGISTERED" && data.token) {
+    console.log("🔥 PUSH TOKEN RECEIVED:", data.token);
+    savePushToken(data.token);
+  }
+};
 
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
