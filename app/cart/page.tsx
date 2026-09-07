@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCart } from "@/context/CartContext";
 import CartItem from "@/components/CartItem";
 import CartSummary from "@/components/CartSummary";
+import ProtectedRoute from "@/components/Protected";
 
 export default function CartPage() {
   const { items, restaurantName, clearCart } = useCart();
@@ -26,6 +27,7 @@ export default function CartPage() {
   }
 
   return (
+    <ProtectedRoute>
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -59,5 +61,6 @@ export default function CartPage() {
         Proceed to Checkout
       </Link>
     </div>
+    </ProtectedRoute>
   );
 }

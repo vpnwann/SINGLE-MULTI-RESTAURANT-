@@ -46,7 +46,15 @@ export default function HomePage() {
           ? result.data
           : [];
 
-        setRestaurants(restaurantList);
+        // Never show a closed restaurant on the customer-facing home page,
+        // even if the API forgets to filter it out server-side. `is_open`
+        // defaults to "open" when the field is missing entirely, so only an
+        // explicit false hides a restaurant here.
+        const openRestaurants = restaurantList.filter(
+          (r) => (r.is_open ?? r.isOpen) !== false
+        );
+
+        setRestaurants(openRestaurants);
       } catch (err) {
         console.error("Restaurant API error:", err);
         setError("Unable to load restaurants.");

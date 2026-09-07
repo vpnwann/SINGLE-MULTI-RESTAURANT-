@@ -30,6 +30,7 @@ export function AuthProvider({ children }) {
   };
 
   return (
+  
     <AuthContext.Provider value={{ user, loading, refresh, logout }}>
       {children}
     </AuthContext.Provider>

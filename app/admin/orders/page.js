@@ -59,6 +59,7 @@ const FALLBACK_STAMP = { ink: "#57615F", wash: "#E9EBEA" };
 function paymentLabel(order, status) {
   const method = order.payment_method ?? order.paymentMethod;
   if (status === "Pending" && method === "COD") return "COD - Not Paid";
+  if (status === "Paid" && method) return `${method} - Paid`;
   return status;
 }
 
@@ -66,6 +67,30 @@ function money(value) {
   const n = Number(value);
   if (!Number.isFinite(n)) return "—";
   return `₹${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+// Coarse relative time for the row list — precise timestamp still lives in
+// the detail panel via toLocaleString.
+function timeAgo(dateStr) {
+  if (!dateStr) return "—";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diffMs / 60000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+// Flags an order that's been sitting unactioned past a reasonable window —
+// a restaurant/admin cue to chase it up, not a hard rule about SLAs.
+const STALE_THRESHOLD_MIN = 15;
+function isStale(order) {
+  const status = order.order_status ?? order.orderStatus;
+  if (status !== "Order Confirmed" || !order.created_at) return false;
+  const mins = (Date.now() - new Date(order.created_at).getTime()) / 60000;
+  return mins > STALE_THRESHOLD_MIN;
 }
 
 function StampSelect({ value, options, stampMap, onChange, ariaLabel }) {
@@ -127,17 +152,38 @@ export default function OrdersPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
   const [paymentFilter, setPaymentFilter] = useState("");
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState(null);
 
-  const load = async () => {
-    setLoading(true);
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setPage(1);
+      setSearch(searchInput.trim());
+    }, 400);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
+  const load = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const params = new URLSearchParams({ page: String(page), limit: "20" });
       if (statusFilter) params.set("status", statusFilter);
       if (paymentFilter) params.set("paymentStatus", paymentFilter);
+      if (search) params.set("search", search);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+      params.set("sortBy", sortBy);
+      params.set("sortDir", sortDir);
       const res = await api.get(`/api/admin/orders?${params.toString()}`);
       setOrders(res.data);
       setPagination(res.pagination);
@@ -151,7 +197,70 @@ export default function OrdersPage() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, statusFilter, paymentFilter]);
+  }, [page, statusFilter, paymentFilter, search, dateFrom, dateTo, sortBy, sortDir]);
+
+  // Auto-refresh polls quietly in the background — no loading spinner, so an
+  // admin mid-review of a row isn't interrupted every 30s.
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const id = setInterval(() => load({ silent: true }), 30000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoRefresh, page, statusFilter, paymentFilter, search, dateFrom, dateTo, sortBy, sortDir]);
+
+  // Close the open detail panel on Escape.
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") setExpanded(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const toggleSort = (field) => {
+    setPage(1);
+    if (sortBy === field) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortBy(field);
+      setSortDir("desc");
+    }
+  };
+
+  const copyToClipboard = async (text, id) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedId(id);
+      setTimeout(() => setCopiedId((cur) => (cur === id ? null : cur)), 1500);
+    } catch {
+      // Clipboard API can fail (permissions, insecure context) — fail silently,
+      // the button just won't show the "Copied" confirmation.
+    }
+  };
+
+  const exportCsv = () => {
+    if (orders.length === 0) return;
+    const headers = ["Order ID", "Restaurant", "Total", "Order Status", "Payment Status", "Payment Method", "Placed At"];
+    const rows = orders.map((o) => [
+      o.id,
+      o.restaurant_name ?? o.restaurantName ?? "",
+      Number(o.total ?? 0).toFixed(2),
+      o.order_status ?? o.orderStatus ?? "",
+      o.payment_status ?? o.paymentStatus ?? "",
+      o.payment_method ?? o.paymentMethod ?? "",
+      o.created_at ? new Date(o.created_at).toISOString() : "",
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `orders-page-${page}-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const updateStatus = async (order, field, value) => {
     const key = field === "orderStatus" ? "order_status" : "payment_status";
@@ -165,6 +274,18 @@ export default function OrdersPage() {
     }
   };
 
+  const hasActiveFilters = statusFilter || paymentFilter || search || dateFrom || dateTo;
+
+  const clearFilters = () => {
+    setStatusFilter("");
+    setPaymentFilter("");
+    setSearchInput("");
+    setSearch("");
+    setDateFrom("");
+    setDateTo("");
+    setPage(1);
+  };
+
   return (
     <div className={`${display.variable} ${body.variable} ${mono.variable} orders-page`}>
       <header className="orders-header">
@@ -172,7 +293,36 @@ export default function OrdersPage() {
           <h1>Orders</h1>
           <p className="count">{pagination ? `${pagination.total} total` : "\u00A0"}</p>
         </div>
+        <div className="header-actions">
+          <label className="auto-refresh">
+            <input
+              type="checkbox"
+              checked={autoRefresh}
+              onChange={(e) => setAutoRefresh(e.target.checked)}
+            />
+            Auto-refresh
+          </label>
+          <button type="button" className="icon-btn" onClick={() => load()} disabled={loading} title="Refresh now">
+            ⟳ Refresh
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={exportCsv}
+            disabled={orders.length === 0}
+            title="Export the current page as CSV"
+          >
+            ⬇ Export CSV
+          </button>
+        </div>
         <div className="filters">
+          <input
+            type="search"
+            aria-label="Search by order ID or restaurant"
+            placeholder="Search order # or restaurant…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
           <select
             aria-label="Filter by order status"
             value={statusFilter}
@@ -203,6 +353,34 @@ export default function OrdersPage() {
               </option>
             ))}
           </select>
+          <div className="date-range">
+            <input
+              type="date"
+              aria-label="From date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => {
+                setPage(1);
+                setDateFrom(e.target.value);
+              }}
+            />
+            <span className="date-sep">–</span>
+            <input
+              type="date"
+              aria-label="To date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => {
+                setPage(1);
+                setDateTo(e.target.value);
+              }}
+            />
+          </div>
+          {hasActiveFilters && (
+            <button type="button" className="clear-filters" onClick={clearFilters}>
+              Clear filters
+            </button>
+          )}
         </div>
       </header>
 
@@ -212,7 +390,12 @@ export default function OrdersPage() {
         <div className="rail-head">
           <span>Order</span>
           <span>Restaurant</span>
-          <span className="num">Total</span>
+          <button type="button" className="sort-head num" onClick={() => toggleSort("total")}>
+            Total {sortBy === "total" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+          </button>
+          <button type="button" className="sort-head" onClick={() => toggleSort("created_at")}>
+            Placed {sortBy === "created_at" ? (sortDir === "asc" ? "▲" : "▼") : ""}
+          </button>
           <span>Order status</span>
           <span>Payment</span>
           <span />
@@ -228,12 +411,17 @@ export default function OrdersPage() {
             const orderStatus = o.order_status ?? o.orderStatus;
             const paymentStatus = o.payment_status ?? o.paymentStatus;
             const isOpen = expanded === o.id;
+            const stale = isStale(o);
             return (
-              <div className={`docket ${isOpen ? "is-open" : ""}`} key={o.id}>
+              <div className={`docket ${isOpen ? "is-open" : ""} ${stale ? "is-stale" : ""}`} key={o.id}>
                 <div className="rail-row">
                   <span className="order-id">#{o.id}</span>
                   <span className="restaurant">{o.restaurant_name ?? o.restaurantName}</span>
                   <span className="num total">{money(o.total)}</span>
+                  <span className="placed" title={o.created_at ? new Date(o.created_at).toLocaleString("en-IN") : ""}>
+                    {timeAgo(o.created_at)}
+                    {stale && <span className="stale-dot" title={`Awaiting action for over ${STALE_THRESHOLD_MIN}m`} />}
+                  </span>
                   <StampSelect
                     ariaLabel={`Order status for order ${o.id}`}
                     value={orderStatus}
@@ -277,8 +465,37 @@ export default function OrdersPage() {
 
                     <div className="detail-grid">
                       <div>
-                        <strong>Address</strong>
+                        <strong>
+                          Address
+                          <button
+                            type="button"
+                            className="copy-btn"
+                            onClick={() =>
+                              copyToClipboard(
+                                typeof o.address === "string" ? o.address : JSON.stringify(o.address),
+                                `addr-${o.id}`
+                              )
+                            }
+                          >
+                            {copiedId === `addr-${o.id}` ? "Copied" : "Copy"}
+                          </button>
+                        </strong>
                         <p>{typeof o.address === "string" ? o.address : JSON.stringify(o.address)}</p>
+                        {o.address?.phone && (
+                          <>
+                            <strong>
+                              Phone
+                              <button
+                                type="button"
+                                className="copy-btn"
+                                onClick={() => copyToClipboard(o.address.phone, `phone-${o.id}`)}
+                              >
+                                {copiedId === `phone-${o.id}` ? "Copied" : "Copy"}
+                              </button>
+                            </strong>
+                            <p className="mono-line">{o.address.phone}</p>
+                          </>
+                        )}
                       </div>
                       <div>
                         <strong>Payment method</strong>
@@ -356,6 +573,47 @@ export default function OrdersPage() {
           letter-spacing: -0.01em;
           margin: 0 0 4px;
         }
+        .header-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-right: auto;
+          margin-left: 8px;
+          flex-wrap: wrap;
+        }
+        .auto-refresh {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 12.5px;
+          color: var(--ink-soft);
+          cursor: pointer;
+          user-select: none;
+        }
+        .auto-refresh input {
+          cursor: pointer;
+        }
+        .icon-btn {
+          font-family: var(--font-body), sans-serif;
+          font-size: 12.5px;
+          padding: 7px 12px;
+          border: 1px solid var(--line);
+          border-radius: 2px;
+          background: #fff;
+          color: var(--ink);
+          cursor: pointer;
+        }
+        .icon-btn:hover:not(:disabled) {
+          border-color: var(--ink-soft);
+        }
+        .icon-btn:disabled {
+          opacity: 0.4;
+          cursor: not-allowed;
+        }
+        .icon-btn:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
         .count {
           font-family: var(--font-mono), monospace;
           font-size: 12.5px;
@@ -367,7 +625,9 @@ export default function OrdersPage() {
           gap: 8px;
           flex-wrap: wrap;
         }
-        .filters select {
+        .filters select,
+        .filters input[type="search"],
+        .filters input[type="date"] {
           font-family: var(--font-body), sans-serif;
           font-size: 13px;
           padding: 8px 12px;
@@ -376,7 +636,40 @@ export default function OrdersPage() {
           background: #fff;
           color: var(--ink);
         }
-        .filters select:focus-visible {
+        .filters input[type="search"] {
+          min-width: 200px;
+        }
+        .filters select:focus-visible,
+        .filters input:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
+        .date-range {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .date-range input[type="date"] {
+          font-family: var(--font-mono), monospace;
+          font-size: 12.5px;
+          padding: 7px 8px;
+        }
+        .date-sep {
+          color: var(--ink-soft);
+          font-size: 13px;
+        }
+        .clear-filters {
+          font-family: var(--font-body), sans-serif;
+          font-size: 12.5px;
+          padding: 8px 12px;
+          border: 1px solid transparent;
+          border-radius: 2px;
+          background: none;
+          color: var(--accent);
+          cursor: pointer;
+          text-decoration: underline;
+        }
+        .clear-filters:focus-visible {
           outline: 2px solid var(--accent);
           outline-offset: 2px;
         }
@@ -408,7 +701,7 @@ export default function OrdersPage() {
         .rail-head,
         .rail-row {
           display: grid;
-          grid-template-columns: 0.7fr 1.4fr 0.9fr 1.5fr 1.2fr auto;
+          grid-template-columns: 0.6fr 1.2fr 0.8fr 0.8fr 1.5fr 1.2fr auto;
           align-items: center;
           gap: 14px;
           padding: 12px 16px;
@@ -419,6 +712,67 @@ export default function OrdersPage() {
           color: var(--ink-soft);
           border-bottom: 1px solid var(--line);
           background: var(--paper-2);
+        }
+        .sort-head {
+          background: none;
+          border: none;
+          padding: 0;
+          font: inherit;
+          font-size: 11.5px;
+          font-weight: 600;
+          color: var(--ink-soft);
+          text-align: left;
+          cursor: pointer;
+        }
+        .sort-head:hover {
+          color: var(--ink);
+        }
+        .sort-head:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
+        }
+        .sort-head.num {
+          text-align: right;
+          justify-self: end;
+        }
+        .placed {
+          font-family: var(--font-mono), monospace;
+          font-size: 12px;
+          color: var(--ink-soft);
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .stale-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: var(--accent);
+          flex-shrink: 0;
+        }
+        .docket.is-stale {
+          border-left: 3px solid var(--accent);
+        }
+        .copy-btn {
+          font-family: var(--font-body), sans-serif;
+          font-size: 10.5px;
+          font-weight: 500;
+          margin-left: 8px;
+          padding: 1px 7px;
+          border: 1px solid var(--line);
+          border-radius: 2px;
+          background: #fff;
+          color: var(--ink-soft);
+          cursor: pointer;
+          text-transform: none;
+        }
+        .copy-btn:hover {
+          border-color: var(--ink-soft);
+          color: var(--ink);
+        }
+        .copy-btn:focus-visible {
+          outline: 2px solid var(--accent);
+          outline-offset: 2px;
         }
         .docket {
           border-bottom: 1px solid var(--line);
@@ -558,6 +912,17 @@ export default function OrdersPage() {
         }
 
         @media (max-width: 760px) {
+          .header-actions {
+            margin-left: 0;
+            width: 100%;
+          }
+          .filters {
+            width: 100%;
+          }
+          .filters input[type="search"] {
+            width: 100%;
+            min-width: 0;
+          }
           .rail-head {
             display: none;
           }
@@ -565,6 +930,9 @@ export default function OrdersPage() {
             grid-template-columns: 1fr;
             gap: 8px;
             padding: 14px 16px;
+          }
+          .placed {
+            order: -1;
           }
           .details-btn {
             justify-self: start;

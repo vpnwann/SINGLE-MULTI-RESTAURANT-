@@ -50,7 +50,9 @@ export default function RestaurantsPage() {
     setLoading(true);
     setError("");
     try {
-      const res = await api.get(`/api/admin/restaurants?limit=100${q ? `&search=${encodeURIComponent(q)}` : ""}`);
+      const res = await api.get(
+        `/api/admin/restaurants?limit=100&includeClosed=true${q ? `&search=${encodeURIComponent(q)}` : ""}`
+      );
       setRestaurants(res.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not load restaurants.");
@@ -115,6 +117,23 @@ export default function RestaurantsPage() {
     }
   };
 
+  const toggleOpen = async (r) => {
+    const nextIsOpen = !(r.is_open ?? r.isOpen);
+    // Optimistic update, rolled back on failure — same pattern as the
+    // orders page status selects.
+    setRestaurants((prev) =>
+      prev.map((x) => (x.id === r.id ? { ...x, is_open: nextIsOpen, isOpen: nextIsOpen } : x))
+    );
+    try {
+      await api.patch(`/api/admin/restaurants/${r.id}/status`, { isOpen: nextIsOpen });
+    } catch (err) {
+      setRestaurants((prev) =>
+        prev.map((x) => (x.id === r.id ? { ...x, is_open: !nextIsOpen, isOpen: !nextIsOpen } : x))
+      );
+      alert(err instanceof ApiError ? err.message : "Couldn't update status. The restaurant was left unchanged.");
+    }
+  };
+
   return (
     <div className={`${display.variable} ${body.variable} ${mono.variable} restaurants-page`}>
       <header className="page-header">
@@ -153,6 +172,7 @@ export default function RestaurantsPage() {
           <span>Cuisine</span>
           <span className="num">Rating</span>
           <span>Delivery time</span>
+          <span>Status</span>
           <span />
         </div>
 
@@ -164,25 +184,39 @@ export default function RestaurantsPage() {
         )}
 
         {!loading &&
-          restaurants.map((r) => (
-            <div className="rail-row" key={r.id}>
-              <span className="name">{r.name}</span>
-              <span className="cuisine">{r.cuisine || "—"}</span>
-              <span className="num rating">{r.rating != null ? Number(r.rating).toFixed(1) : "—"}</span>
-              <span className="delivery">{r.delivery_time ?? r.deliveryTime ?? "—"}</span>
-              <div className="row-actions">
-                <Link href={`/admin/restaurants/${r.id}/food`} className="btn-ghost">
-                  Menu
-                </Link>
-                <button className="btn-ghost" onClick={() => openEdit(r)}>
-                  Edit
+          restaurants.map((r) => {
+            const isOpen = r.is_open ?? r.isOpen;
+            return (
+              <div className={`rail-row ${isOpen === false ? "is-closed" : ""}`} key={r.id}>
+                <span className="name">{r.name}</span>
+                <span className="cuisine">{r.cuisine || "—"}</span>
+                <span className="num rating">{r.rating != null ? Number(r.rating).toFixed(1) : "—"}</span>
+                <span className="delivery">{r.delivery_time ?? r.deliveryTime ?? "—"}</span>
+                <button
+                  type="button"
+                  className={`status-toggle ${isOpen ? "is-open" : "is-shut"}`}
+                  onClick={() => toggleOpen(r)}
+                  role="switch"
+                  aria-checked={!!isOpen}
+                  aria-label={`${r.name} is ${isOpen ? "open" : "closed"} — click to ${isOpen ? "close" : "open"}`}
+                >
+                  <span className="status-dot" aria-hidden="true" />
+                  {isOpen ? "Open" : "Closed"}
                 </button>
-                <button className="btn-danger" onClick={() => remove(r)}>
-                  Delete
-                </button>
+                <div className="row-actions">
+                  <Link href={`/admin/restaurants/${r.id}/food`} className="btn-ghost">
+                    Menu
+                  </Link>
+                  <button className="btn-ghost" onClick={() => openEdit(r)}>
+                    Edit
+                  </button>
+                  <button className="btn-danger" onClick={() => remove(r)}>
+                    Delete
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
       </div>
 
       {editing !== null && (
@@ -401,7 +435,7 @@ export default function RestaurantsPage() {
         .rail-head,
         .rail-row {
           display: grid;
-          grid-template-columns: 2fr 1fr 0.7fr 1fr auto;
+          grid-template-columns: 1.8fr 0.9fr 0.6fr 0.9fr 0.9fr auto;
           align-items: center;
           gap: 14px;
           padding: 12px 16px;
@@ -419,6 +453,12 @@ export default function RestaurantsPage() {
         .rail-row:last-child {
           border-bottom: none;
         }
+        .rail-row.is-closed {
+          background: #fbfbfa;
+        }
+        .rail-row.is-closed .name {
+          color: var(--ink-soft);
+        }
         .name {
           font-weight: 500;
         }
@@ -432,6 +472,43 @@ export default function RestaurantsPage() {
         }
         .rating {
           font-family: var(--font-mono), monospace;
+        }
+        .status-toggle {
+          justify-self: start;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-family: var(--font-mono), monospace;
+          font-size: 12px;
+          font-weight: 500;
+          padding: 5px 10px 5px 8px;
+          border-radius: 999px;
+          border: 1px solid;
+          cursor: pointer;
+          background: none;
+        }
+        .status-toggle.is-open {
+          color: #3e8c4c;
+          border-color: #bfe0c6;
+          background: #edf6ee;
+        }
+        .status-toggle.is-open:hover {
+          background: #e3f1e5;
+        }
+        .status-toggle.is-shut {
+          color: #57615f;
+          border-color: var(--line);
+          background: #eceeed;
+        }
+        .status-toggle.is-shut:hover {
+          background: #e2e5e4;
+        }
+        .status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: currentColor;
+          flex-shrink: 0;
         }
         .row-actions {
           display: flex;
@@ -452,6 +529,9 @@ export default function RestaurantsPage() {
           .rail-row {
             grid-template-columns: 1fr;
             gap: 6px;
+          }
+          .status-toggle {
+            justify-self: start;
           }
           .row-actions {
             justify-self: start;

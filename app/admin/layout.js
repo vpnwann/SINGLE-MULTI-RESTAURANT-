@@ -50,7 +50,9 @@ function Gate({ children }) {
 
 export default function AdminLayout({ children }) {
   return (
+    
     <AuthProvider>
+    
       <Gate>{children}</Gate>
     </AuthProvider>
   );
