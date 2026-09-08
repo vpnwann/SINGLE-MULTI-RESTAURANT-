@@ -43,10 +43,13 @@ export default function CartItem({ item }: { item: CartItemType }) {
         ₹{item.price * item.quantity}
       </span>
       <button
+        type="button"
         onClick={() => removeFromCart(item.id)}
-        className="text-sm text-red-600 hover:underline"
+        className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50 transition-colors"
+        aria-label={`Remove ${item.name} from cart`}
+        title="Remove"
       >
-        Remove
+        <span aria-hidden="true">🗑️</span>
       </button>
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { categories } from "@/data/categories";
 import RestaurantCard from "@/components/RestaurantCard";
@@ -8,11 +8,25 @@ import RestaurantCard from "@/components/RestaurantCard";
 // Cycling accent set for the category rail — echoes striped market awnings
 const ACCENTS = ["#B8481E", "#D8A312", "#5B6660"];
 
+type CarouselImage = {
+  id: number;
+  image_url: string;
+  title: string | null;
+  link_url: string | null;
+  sort_order: number;
+  is_active: boolean;
+};
+
 export default function HomePage() {
   const [search, setSearch] = useState("");
   const [restaurants, setRestaurants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  const [carouselImages, setCarouselImages] = useState<CarouselImage[]>([]);
+  const [carouselLoading, setCarouselLoading] = useState(true);
+  const [activeSlide, setActiveSlide] = useState(0);
+  const autoplayRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     async function fetchRestaurants() {
@@ -66,6 +80,73 @@ export default function HomePage() {
 
     fetchRestaurants();
   }, []);
+
+  // Fetch the active carousel banners. Failures here are non-fatal — the
+  // homepage is still fully usable without a banner, so we just hide the
+  // section rather than showing an error state.
+  useEffect(() => {
+    async function fetchCarousel() {
+      try {
+        setCarouselLoading(true);
+
+        const response = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/carousel`
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success) {
+          throw new Error("API returned success: false");
+        }
+
+        const images = Array.isArray(result.data) ? result.data : [];
+
+        // Defensive filter/sort in case the API ever forgets to apply
+        // is_active / sort_order server-side.
+        const activeImages = images
+          .filter((img: CarouselImage) => img.is_active !== false)
+          .sort((a: CarouselImage, b: CarouselImage) => a.sort_order - b.sort_order);
+
+        setCarouselImages(activeImages);
+      } catch (err) {
+        console.error("Carousel API error:", err);
+        setCarouselImages([]);
+      } finally {
+        setCarouselLoading(false);
+      }
+    }
+
+    fetchCarousel();
+  }, []);
+
+  // Autoplay — advance every 5s, pause/reset whenever the slide count changes.
+  useEffect(() => {
+    if (carouselImages.length <= 1) return;
+
+    autoplayRef.current = setInterval(() => {
+      setActiveSlide((prev) => (prev + 1) % carouselImages.length);
+    }, 5000);
+
+    return () => {
+      if (autoplayRef.current) clearInterval(autoplayRef.current);
+    };
+  }, [carouselImages.length]);
+
+  const goToSlide = (index: number) => {
+    setActiveSlide(index);
+    // Restart the autoplay timer so a manual click doesn't get immediately
+    // overridden by an in-flight interval tick.
+    if (autoplayRef.current) clearInterval(autoplayRef.current);
+    if (carouselImages.length > 1) {
+      autoplayRef.current = setInterval(() => {
+        setActiveSlide((prev) => (prev + 1) % carouselImages.length);
+      }, 5000);
+    }
+  };
 
   const filteredRestaurants = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -232,6 +313,75 @@ export default function HomePage() {
 
 
       <div className="max-w-5xl mx-auto px-4 py-8 font-body">
+        {/* Carousel banner */}
+        {carouselLoading && (
+          <section className="mb-10">
+            <div className="w-full h-40 sm:h-56 rounded-lg bg-[#EDE7D9] animate-pulse" />
+          </section>
+        )}
+
+        {!carouselLoading && carouselImages.length > 0 && (
+          <section className="mb-10">
+            <div className="relative w-full h-40 sm:h-56 rounded-lg overflow-hidden border border-[#E7E1D3] shadow-sm">
+              {carouselImages.map((image, index) => {
+                const slide = (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={image.image_url}
+                    alt={image.title || "Promotional banner"}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${
+                      index === activeSlide ? "opacity-100" : "opacity-0 pointer-events-none"
+                    }`}
+                  />
+                );
+
+                return (
+                  <div key={image.id} className="absolute inset-0">
+                    {image.link_url ? (
+                      <a
+                        href={image.link_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="block w-full h-full"
+                      >
+                        {slide}
+                      </a>
+                    ) : (
+                      slide
+                    )}
+
+                    {image.title && index === activeSlide && (
+                      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent px-4 py-3">
+                        <p className="font-display text-sm sm:text-base text-white font-semibold">
+                          {image.title}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+              {/* Dots */}
+              {carouselImages.length > 1 && (
+                <div className="absolute bottom-2 right-3 flex gap-1.5">
+                  {carouselImages.map((_, index) => (
+                    <button
+                      key={index}
+                      aria-label={`Go to slide ${index + 1}`}
+                      onClick={() => goToSlide(index)}
+                      className={`w-1.5 h-1.5 rounded-full transition-all ${
+                        index === activeSlide
+                          ? "bg-white w-4"
+                          : "bg-white/50"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {/* Categories */}
         <section className="mb-10">
           <h2 className="font-display text-lg font-semibold text-[#1C1B1A] mb-3">

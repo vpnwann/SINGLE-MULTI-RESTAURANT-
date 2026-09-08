@@ -259,6 +259,24 @@ export default function DashboardPage() {
                 </svg>
               }
             />
+             <QuickAction
+              href="/admin/Carousel"
+              title="Add-Offer"
+              description="Add Offer Images "
+              icon={
+                <svg
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path d="M6 3h12v18H6z" />
+                  <path d="M9 7h6M9 11h6M9 15h3" />
+                </svg>
+              }
+            />
 
             <QuickAction
               href="/admin/restaurants"
