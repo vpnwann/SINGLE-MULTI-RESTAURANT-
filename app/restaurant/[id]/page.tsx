@@ -3,6 +3,7 @@
 import { use, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import FoodCard from "@/components/FoodCard";
+import PageTransition from "@/components/PageAnimation";
 
 type Restaurant = {
   id: number;
@@ -379,6 +380,10 @@ export default function RestaurantPage({
   }
 
   return (
+
+<PageTransition>
+
+
     <div className="min-h-screen bg-[#F6F1E7] font-body">
       {fontStyles}
 
@@ -559,5 +564,6 @@ export default function RestaurantPage({
         </div>
       </div>
     </div>
+    </PageTransition>
   );
 }

@@ -24,9 +24,9 @@ return (
 <SplashScreen />
 
 <main className="min-h-screen pb-20">
-  <PageTransition>
+ 
 {children}
-</PageTransition>
+
 </main>
 
 <Navbar />

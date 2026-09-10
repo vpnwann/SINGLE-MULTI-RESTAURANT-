@@ -9,6 +9,7 @@ import RazorpayCheckout, {
   RazorpaySuccessDetails,
 } from "@/components/RazorpayCheckout";
 import { ordersApi } from "../orders/orderapi";
+import PageTransition from "@/components/PageAnimation";
 
 // -----------------------------------------------------------------------------
 // TYPES
@@ -614,6 +615,7 @@ export default function CheckoutPage() {
   // ---------------------------------------------------------------------------
 
   return (
+    <PageTransition>
     <div className="min-h-screen bg-[#F6F1E7] font-body">
       {fontStyles}
 
@@ -946,5 +948,6 @@ export default function CheckoutPage() {
         )}
       </div>
     </div>
+    </PageTransition>
   );
 }

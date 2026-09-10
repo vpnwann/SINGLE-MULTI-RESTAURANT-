@@ -5,6 +5,7 @@ import Link from "next/link";
 import ProtectedRoute from "../../../components/Protected";
 import { ordersApi } from "../orderapi";
 import { formatCurrency } from "@/lib/calculations";
+import PageTransition from "@/components/PageAnimation";
 
 // Matches mapOrder() in orderapi.js — the camelCase shape the frontend
 // works with, adapted from the raw Postgres row.
@@ -305,7 +306,9 @@ export default function OrderTrackingPage({
   const { id } = use(params);
   return (
     <ProtectedRoute>
+      <PageTransition>
       <OrderTrackingContent id={id} />
+      </PageTransition>
     </ProtectedRoute>
   );
 }

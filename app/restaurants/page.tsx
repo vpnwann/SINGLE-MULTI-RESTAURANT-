@@ -8,6 +8,7 @@ import {
 } from "react";
 import { useSearchParams } from "next/navigation";
 import RestaurantCard from "@/components/RestaurantCard";
+import PageTransition from "@/components/PageAnimation";
 
 type Restaurant = {
   id: number;
@@ -436,6 +437,7 @@ function RestaurantsContent() {
 
 export default function RestaurantsPage() {
   return (
+    <PageTransition>
     <Suspense
       fallback={
         <div className="min-h-screen bg-[#F6F1E7]">
@@ -455,5 +457,6 @@ export default function RestaurantsPage() {
     >
       <RestaurantsContent />
     </Suspense>
+    </PageTransition>
   );
 }
