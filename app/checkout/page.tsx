@@ -198,62 +198,58 @@ function OrderSuccessModal({
       aria-labelledby="order-success-heading"
       onClick={onClose}
     >
-      <div
-        className="bg-white rounded-xl max-w-sm w-full p-6 text-center shadow-xl"
+     <div
+  className="fixed inset-0 z-50 bg-white w-screen h-screen flex flex-col items-center justify-center px-6 text-center"
+  style={{
+    animation: "orderSuccessPopIn 0.25s ease-out",
+  }}
+  onClick={(e) => e.stopPropagation()}
+>
+  <div className="mx-auto mb-4 flex h-20 w-20 items-center justify-center rounded-full bg-[#EAF4EC]">
+    <svg
+      className="h-10 w-10 text-[#3C8B5E]"
+      fill="none"
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      strokeWidth={2.5}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M4.5 12.75l6 6 9-13.5"
         style={{
-          animation:
-            "orderSuccessPopIn 0.25s ease-out",
+          strokeDasharray: 24,
+          strokeDashoffset: 0,
+          animation: "orderSuccessCheck 0.4s ease-out 0.15s backwards",
         }}
-        onClick={(e) =>
-          e.stopPropagation()
-        }
-      >
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-[#EAF4EC]">
-          <svg
-            className="h-7 w-7 text-[#3C8B5E]"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2.5}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M4.5 12.75l6 6 9-13.5"
-              style={{
-                strokeDasharray: 24,
-                strokeDashoffset: 0,
-                animation:
-                  "orderSuccessCheck 0.4s ease-out 0.15s backwards",
-              }}
-            />
-          </svg>
-        </div>
+      />
+    </svg>
+  </div>
 
-        <h2
-          id="order-success-heading"
-          className="font-display text-xl font-semibold text-[#1C1B1A] mb-1"
-        >
-          Order placed!
-        </h2>
+  <h2
+    id="order-success-heading"
+    className="font-display text-2xl font-semibold text-[#1C1B1A] mb-2"
+  >
+    Order placed!
+  </h2>
 
-        <p className="text-sm text-[#8A8578] mb-1 font-data">
-          Order #{info.orderId}
-        </p>
+  <p className="text-sm text-[#8A8578] mb-2 font-data">
+    Order #{info.orderId}
+  </p>
 
-        <p className="text-sm text-[#5B6660] mb-5">
-          {info.paymentMethod === "cod"
-            ? "Pay with cash when it arrives. We'll notify you as it's prepared."
-            : "Payment received. We'll notify you as it's prepared."}
-        </p>
+  <p className="text-base text-[#5B6660] mb-8 max-w-sm">
+    {info.paymentMethod === "cod"
+      ? "Pay with cash when it arrives. We'll notify you as it's prepared."
+      : "Payment received. We'll notify you as it's prepared."}
+  </p>
 
-        <button
-          onClick={onViewOrder}
-          className="w-full bg-[#B8481E] text-white font-medium py-2.5 rounded-md hover:bg-[#8f3717] transition-colors"
-        >
-          View order
-        </button>
-      </div>
+  <button
+    onClick={onViewOrder}
+    className="w-full max-w-sm bg-[#B8481E] text-white font-medium py-3 rounded-md hover:bg-[#8f3717] transition-colors"
+  >
+    View order
+  </button>
+</div>
     </div>
   );
 }
@@ -343,9 +339,7 @@ export default function CheckoutPage() {
     }
 
     const timer = setTimeout(() => {
-      router.push(
-        `/orders?orderId=${successInfo.orderId}`
-      );
+       router.push(`/orders/${successInfo.orderId}`);
     }, 2500);
 
     return () =>

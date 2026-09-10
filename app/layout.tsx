@@ -5,6 +5,7 @@ import Navbar from "@/components/Navbar";
 import SplashScreen from "@/components/SplashScreen";
 import NativeBridge from "./Hooks/NativeCallNotfi";
 import { AuthProvider } from "../app/Auth.context";
+import PageTransition from "@/components/PageAnimation";
 
 export const metadata: Metadata = {
 title: "TastyGo | Food Delivery",
@@ -23,7 +24,9 @@ return (
 <SplashScreen />
 
 <main className="min-h-screen pb-20">
+  <PageTransition>
 {children}
+</PageTransition>
 </main>
 
 <Navbar />

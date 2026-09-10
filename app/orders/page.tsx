@@ -55,7 +55,14 @@ function OrdersPageContent() {
   }
 
   if (orders === null) {
-    return <div className="max-w-2xl mx-auto px-4 py-16 text-center">Loading...</div>;
+    return <div className="max-w-2xl mx-auto px-4 py-24 flex flex-col items-center justify-center gap-6">
+  <div className="flex gap-3">
+    <span className="w-4 h-4 bg-green-600 rounded-full animate-bounce [animation-delay:-0.3s]" />
+    <span className="w-4 h-4 bg-green-600 rounded-full animate-bounce [animation-delay:-0.15s]" />
+    <span className="w-4 h-4 bg-green-600 rounded-full animate-bounce" />
+  </div>
+  <p className="text-xl font-semibold text-gray-700">Finding great food near you...</p>
+</div>
   }
 
   if (orders.length === 0) {
